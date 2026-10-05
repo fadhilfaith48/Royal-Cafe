@@ -10,6 +10,9 @@ import javax.swing.JOptionPane;
  */
 public class login extends javax.swing.JFrame {
 
+    private static final String DUMMY_HASH =
+            "pbkdf2$210000$PKnflXwrE3GyJHHbfMrVRg==$qE/TYSk6jQmN5eh1R73crfkvh8EJLje3Cw6NoLlp/WE=";
+
     public login() {
         initComponents();
         setLocationRelativeTo(null);
@@ -131,14 +134,19 @@ public class login extends javax.swing.JFrame {
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(
-                     "SELECT * FROM users WHERE username = ? AND password = ?")) {
+                     "SELECT role, password FROM users WHERE username = ?")) {
 
             ps.setString(1, username);
-            ps.setString(2, password);
             ResultSet rs = ps.executeQuery();
 
+            String role = null;
+            String storedHash = DUMMY_HASH;
             if (rs.next()) {
-                String role = rs.getString("role");
+                role = rs.getString("role");
+                storedHash = rs.getString("password");
+            }
+
+            if (role != null && PasswordUtil.verify(password.toCharArray(), storedHash)) {
                 Dashboard dashboard = new Dashboard(username, role);
                 dashboard.setVisible(true);
                 this.dispose();
@@ -151,7 +159,7 @@ public class login extends javax.swing.JFrame {
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                 "Koneksi database gagal:\n" + e.getMessage()
-                + "\n\nPastikan:\n- MySQL sudah berjalan (XAMPP/WAMP)\n- Database nadi_cofe sudah dibuat\n- Password di DBConnection.java sudah benar",
+                + "\n\nPastikan:\n- MySQL sudah berjalan (XAMPP/WAMP)\n- Database faith_coffe sudah dibuat\n- Variabel DB_PASS sudah diset sesuai password MySQL kamu",
                 "Error Koneksi", JOptionPane.ERROR_MESSAGE);
         }
     }
