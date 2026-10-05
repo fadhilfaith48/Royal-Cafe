@@ -50,11 +50,17 @@ CREATE TABLE IF NOT EXISTS detail_transaksi (
     FOREIGN KEY (kode_transaksi) REFERENCES transaksi(kode_transaksi)
 );
 
--- Default admin user (password: GANTI_PASSWORD_ADMIN)
-INSERT INTO users (username, password, role) VALUES
-('admin', 'GANTI_PASSWORD_ADMIN', 'admin'),
-('kasir', 'GANTI_PASSWORD_KASIR', 'kasir')
-ON DUPLICATE KEY UPDATE username=username;
+-- ============================================
+-- User awal
+-- ============================================
+-- Tidak ada user default di script ini. Password disimpan sebagai
+-- hash PBKDF2 (lihat PasswordUtil.java), bukan teks biasa, dan
+-- sengaja tidak ditulis di dalam repo.
+--
+-- Buat user pertama setelah MySQL berjalan (pilih role: admin/kasir):
+--   java -cp lib/mysql-connector-j-8.0.31.jar ROYALCAFE.PasswordTool admin admin
+--
+-- Jalankan perintah yang sama lagi kapan saja untuk reset password.
 
 -- ============================================
 -- Data menu (nama & harga sesuai Dashboard.java)

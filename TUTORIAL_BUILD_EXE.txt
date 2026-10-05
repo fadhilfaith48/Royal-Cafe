@@ -127,9 +127,16 @@ STEP 11 - Jalankan aplikasi
   - Klik 2x file RoyalCafe.exe
   - Aplikasi Royal Cafe akan terbuka
 
-LOGIN DEFAULT:
-  Admin : username=admin   password=GANTI_PASSWORD_ADMIN
-  Kasir : username=kasir   password=GANTI_PASSWORD_KASIR
+LOGIN:
+  Tidak ada user/password default. Password disimpan sebagai hash
+  di database, jadi tidak ada yang bisa dibaca langsung dari SQL.
+
+  Buat user dulu sebelum login (MySQL harus sudah jalan):
+    java -cp lib/mysql-connector-j-8.0.31.jar ROYALCAFE.PasswordTool admin admin
+      -> ganti "admin admin" dengan username dan role yang kamu mau
+      -> tool akan menanyakan password secara langsung
+
+  Jalankan perintah yang sama lagi untuk reset password.
 
 ====================================================
 BAGIAN 5 - KIRIM KE ORANG LAIN
