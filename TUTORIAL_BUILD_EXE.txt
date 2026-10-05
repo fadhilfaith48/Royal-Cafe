@@ -1,0 +1,159 @@
+====================================================
+  TUTORIAL MEMBUAT FILE EXE - ROYAL CAFE POS SYSTEM
+  Dibuat oleh: Fadhil
+====================================================
+
+TOOLS YANG DIBUTUHKAN:
+  1. NetBeans IDE
+  2. Java JDK 17 (https://adoptium.net)
+  3. Launch4j 3.50 (https://sourceforge.net/projects/launch4j/)
+  4. XAMPP (https://www.apachefriends.org)
+
+====================================================
+BAGIAN 1 - PERSIAPAN DATABASE
+====================================================
+
+STEP 1 - Install dan jalankan XAMPP
+  - Install XAMPP
+  - Buka XAMPP Control Panel
+  - Klik START pada MySQL (harus hijau)
+
+STEP 2 - Import database
+  - Buka browser, ketik: http://localhost/phpmyadmin
+  - Klik "New" di panel kiri
+  - Nama database: faith_coffe → klik Create
+  - Klik database faith_coffe
+  - Klik tab "Import"
+  - Klik "Choose File" → pilih file Royal_cofe.sql
+  - Klik tombol "Go" / "Import"
+  - Tunggu sampai muncul pesan sukses
+
+====================================================
+BAGIAN 2 - BUILD PROJECT DI NETBEANS
+====================================================
+
+STEP 3 - Buka project di NetBeans
+  - File → Open Project
+  - Pilih folder "Cafe Management Shop"
+  - Klik Open
+
+STEP 4 - Ganti versi Java ke 17
+  - Klik kanan nama project "fadhil" di panel Projects
+  - Pilih Properties
+  - Klik "Sources" di panel kiri
+  - Source/Binary Format → pilih "17"
+  - Klik OK
+
+STEP 5 - Build project
+  - Klik kanan nama project "fadhil"
+  - Pilih "Clean and Build"
+  - Tunggu sampai muncul: BUILD SUCCESSFUL
+  - File fadhil.jar akan ada di folder: dist/fadhil.jar
+
+====================================================
+BAGIAN 3 - BUAT FILE EXE DENGAN LAUNCH4J
+====================================================
+
+STEP 6 - Install Launch4j
+  - Download dari: https://sourceforge.net/projects/launch4j/
+  - Install seperti biasa (Next → Next → Install → Finish)
+
+STEP 7 - Siapkan folder kerja
+  - Buka Command Prompt (Win+R → ketik cmd → Enter)
+  - Ketik perintah berikut satu per satu:
+
+  Buat folder:
+  mkdir C:\RoyalCafe_dist
+
+  Copy file JAR:
+  copy /Y "C:\Users\[NAMA_USER]\OneDrive\Documents\Cafe Management Shop\dist\fadhil.jar" "C:\RoyalCafe_dist\fadhil.jar"
+
+  Copy folder lib (MySQL driver):
+  xcopy "C:\Users\[NAMA_USER]\OneDrive\Documents\Cafe Management Shop\dist\lib" "C:\RoyalCafe_dist\lib\" /E /Y
+
+  CATATAN: Ganti [NAMA_USER] dengan nama user Windows kamu
+
+STEP 8 - Buat file config.xml
+  - Buka Notepad
+  - Copy paste teks berikut:
+
+-------- MULAI COPY --------
+<?xml version="1.0" encoding="UTF-8"?>
+<launch4jConfig>
+  <dontWrapJar>false</dontWrapJar>
+  <headerType>gui</headerType>
+  <jar>C:\RoyalCafe_dist\fadhil.jar</jar>
+  <outfile>C:\RoyalCafe_dist\RoyalCafe.exe</outfile>
+  <errTitle>Royal Cafe</errTitle>
+  <chdir>.</chdir>
+  <priority>normal</priority>
+  <downloadUrl>https://java.com/download</downloadUrl>
+  <stayAlive>false</stayAlive>
+  <restartOnCrash>false</restartOnCrash>
+  <classPath>
+    <mainClass>ROYALCAFE.login</mainClass>
+    <cp>lib/mysql-connector-j-8.0.31.jar</cp>
+  </classPath>
+  <jre>
+    <minVersion>1.8.0</minVersion>
+    <jdkPreference>preferJre</jdkPreference>
+    <runtimeBits>64/32</runtimeBits>
+  </jre>
+</launch4jConfig>
+-------- SELESAI COPY --------
+
+  - Simpan file sebagai: config.xml
+    (di folder: C:\RoyalCafe_dist\config.xml)
+  - Pastikan "Save as type" pilih "All Files" bukan .txt
+
+STEP 9 - Jalankan Launch4j via Command Prompt
+  - Di Command Prompt, ketik:
+
+  "C:\Program Files (x86)\Launch4j\launch4jc.exe" "C:\RoyalCafe_dist\config.xml"
+
+  - Tekan Enter
+  - Tunggu muncul: launch4j: Successfully created C:\RoyalCafe_dist\RoyalCafe.exe
+
+STEP 10 - Cek hasil
+  - Buka File Explorer → C:\RoyalCafe_dist\
+  - Harus ada file: RoyalCafe.exe
+
+====================================================
+BAGIAN 4 - MENJALANKAN APLIKASI
+====================================================
+
+STEP 11 - Jalankan aplikasi
+  - Pastikan XAMPP MySQL sudah START (hijau)
+  - Klik 2x file RoyalCafe.exe
+  - Aplikasi Royal Cafe akan terbuka
+
+LOGIN DEFAULT:
+  Admin : username=admin   password=GANTI_PASSWORD_ADMIN
+  Kasir : username=kasir   password=GANTI_PASSWORD_KASIR
+
+====================================================
+BAGIAN 5 - KIRIM KE ORANG LAIN
+====================================================
+
+File yang harus dikirim (zip semua ini):
+  RoyalCafe.exe
+  fadhil.jar
+  lib/
+    mysql-connector-j-8.0.31.jar
+  Royal_cofe.sql
+  CARA_INSTALL.txt
+
+Penerima harus:
+  1. Install Java 17 (https://adoptium.net)
+  2. Install XAMPP dan jalankan MySQL
+  3. Import Royal_cofe.sql ke phpMyAdmin
+  4. Klik 2x RoyalCafe.exe
+
+====================================================
+CATATAN PENTING:
+  - Aplikasi TIDAK bisa dibuka di HP (Android/iOS)
+  - Hanya bisa di Windows PC/Laptop
+  - MySQL HARUS aktif setiap kali buka aplikasi
+  - Jika error "driver not found" pastikan folder
+    lib/ ada di folder yang sama dengan RoyalCafe.exe
+====================================================

@@ -1,0 +1,8 @@
+nbproject/private/
+build/
+dist/
+oracleJdk-27/
+db.properties
+.env
+*.class
+*.jar
