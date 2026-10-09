@@ -199,7 +199,7 @@ public class Dashboard extends javax.swing.JFrame {
         btnBayar.addActionListener(e -> prosesBayar());
         btnReset.addActionListener(e -> reset());
         btnKelolaMenu.addActionListener(e -> {
-            MenuCRUD crud = new MenuCRUD();
+            MenuCRUD crud = new MenuCRUD(this::loadMenuFromDB);
             crud.setVisible(true);
             crud.addWindowListener(new java.awt.event.WindowAdapter() {
                 @Override public void windowClosed(java.awt.event.WindowEvent we) {

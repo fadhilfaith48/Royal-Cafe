@@ -11,12 +11,24 @@ import javax.swing.table.DefaultTableModel;
 public class MenuCRUD extends javax.swing.JFrame {
 
     private DefaultTableModel tableModel;
+    private final Runnable onDataChanged;
 
     public MenuCRUD() {
+        this(null);
+    }
+
+    public MenuCRUD(Runnable onDataChanged) {
+        this.onDataChanged = onDataChanged;
         initComponents();
         setLocationRelativeTo(null);
         initTable();
         loadMenuData();
+    }
+
+    private void notifyChanged() {
+        if (onDataChanged != null) {
+            onDataChanged.run();
+        }
     }
 
     private void initTable() {
@@ -109,6 +121,7 @@ public class MenuCRUD extends javax.swing.JFrame {
                 JOptionPane.showMessageDialog(this, "Menu berhasil ditambahkan!", "Sukses", JOptionPane.INFORMATION_MESSAGE);
                 clearForm();
                 loadMenuData();
+                notifyChanged();
             } else {
                 JOptionPane.showMessageDialog(this, "Tidak ada data yang tersimpan.", "Peringatan", JOptionPane.WARNING_MESSAGE);
             }
@@ -149,6 +162,7 @@ public class MenuCRUD extends javax.swing.JFrame {
                 JOptionPane.showMessageDialog(this, "Menu berhasil diupdate!", "Sukses", JOptionPane.INFORMATION_MESSAGE);
                 clearForm();
                 loadMenuData();
+                notifyChanged();
             } else {
                 JOptionPane.showMessageDialog(this,
                     "Tidak ada data yang diupdate.\nID=" + id + " mungkin tidak ditemukan di database.",
@@ -184,6 +198,7 @@ public class MenuCRUD extends javax.swing.JFrame {
             JOptionPane.showMessageDialog(this, "Menu berhasil dihapus!", "Sukses", JOptionPane.INFORMATION_MESSAGE);
             clearForm();
             loadMenuData();
+            notifyChanged();
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this, "Gagal hapus menu: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
