@@ -580,55 +580,65 @@ public class Dashboard extends javax.swing.JFrame {
         String kode = "TRX" + new SimpleDateFormat("yyyyMMddHHmmss").format(new java.util.Date());
 
         try (Connection conn = DBConnection.getConnection()) {
-            // Header
-            String sqlH = "INSERT INTO transaksi (kode_transaksi, kasir, subtotal, pajak, total, bayar, kembalian) VALUES (?,?,?,?,?,?,?)";
-            try (PreparedStatement ps = conn.prepareStatement(sqlH)) {
-                ps.setString(1, kode); ps.setString(2, currentUser);
-                ps.setInt(3, subtotal); ps.setInt(4, pajak); ps.setInt(5, totalInt);
-                ps.setLong(6, bayar); ps.setLong(7, kembalian);
-                ps.executeUpdate();
-            } catch (SQLException ex) {
-                try (PreparedStatement alt = conn.prepareStatement(
-                    "ALTER TABLE transaksi ADD COLUMN IF NOT EXISTS bayar BIGINT DEFAULT 0, ADD COLUMN IF NOT EXISTS kembalian BIGINT DEFAULT 0")) {
-                    alt.executeUpdate();
-                } catch (SQLException ignored) {}
+            // Pastikan kolom bayar/kembalian ada. DDL dijalankan SEBELUM transaksi
+            // karena ALTER TABLE memicu implicit commit yang akan memutus transaksi.
+            pastikanKolomBayarAda(conn);
+
+            conn.setAutoCommit(false);
+            try {
+                // Header
+                String sqlH = "INSERT INTO transaksi (kode_transaksi, kasir, subtotal, pajak, total, bayar, kembalian) VALUES (?,?,?,?,?,?,?)";
                 try (PreparedStatement ps = conn.prepareStatement(sqlH)) {
                     ps.setString(1, kode); ps.setString(2, currentUser);
                     ps.setInt(3, subtotal); ps.setInt(4, pajak); ps.setInt(5, totalInt);
                     ps.setLong(6, bayar); ps.setLong(7, kembalian);
                     ps.executeUpdate();
                 }
-            }
-            // Detail
-            String sqlD = "INSERT INTO detail_transaksi (kode_transaksi, nama_menu, harga, qty, subtotal) VALUES (?,?,?,?,?)";
-            try (PreparedStatement ps = conn.prepareStatement(sqlD)) {
-                for (MenuRow m : menuRows) {
-                    if (m.checkBox.isSelected()) {
-                        int qty = (Integer) m.spinner.getValue();
-                        ps.setString(1, kode); ps.setString(2, m.nama);
-                        ps.setInt(3, m.harga); ps.setInt(4, qty); ps.setInt(5, qty * m.harga);
-                        ps.addBatch();
+
+                // Detail
+                String sqlD = "INSERT INTO detail_transaksi (kode_transaksi, nama_menu, harga, qty, subtotal) VALUES (?,?,?,?,?)";
+                try (PreparedStatement ps = conn.prepareStatement(sqlD)) {
+                    for (MenuRow m : menuRows) {
+                        if (m.checkBox.isSelected()) {
+                            int qty = (Integer) m.spinner.getValue();
+                            ps.setString(1, kode); ps.setString(2, m.nama);
+                            ps.setInt(3, m.harga); ps.setInt(4, qty); ps.setInt(5, qty * m.harga);
+                            ps.addBatch();
+                        }
+                    }
+                    ps.executeBatch();
+                }
+
+                // Kurangi stok di database sesuai qty yang dibeli.
+                // Jika ada baris yang tidak ter-update (stok kurang), batalkan semua.
+                String sqlStok = "UPDATE menu SET stok = stok - ? WHERE id = ? AND stok >= ?";
+                try (PreparedStatement ps = conn.prepareStatement(sqlStok)) {
+                    for (MenuRow m : menuRows) {
+                        if (m.checkBox.isSelected()) {
+                            int qty = (Integer) m.spinner.getValue();
+                            ps.setInt(1, qty);
+                            ps.setInt(2, m.id);
+                            ps.setInt(3, qty); // hanya kurangi jika stok cukup
+                            ps.addBatch();
+                        }
+                    }
+                    int[] hasil = ps.executeBatch();
+                    for (int jumlah : hasil) {
+                        if (jumlah == 0) {
+                            throw new SQLException("Stok tidak cukup untuk salah satu menu yang dipilih.");
+                        }
                     }
                 }
-                ps.executeBatch();
+
+                conn.commit();
+            } catch (SQLException ex) {
+                try { conn.rollback(); } catch (SQLException ignored) {}
+                throw ex;
+            } finally {
+                try { conn.setAutoCommit(true); } catch (SQLException ignored) {}
             }
 
-            // Kurangi stok di database sesuai qty yang dibeli
-            String sqlStok = "UPDATE menu SET stok = stok - ? WHERE id = ? AND stok >= ?";
-            try (PreparedStatement ps = conn.prepareStatement(sqlStok)) {
-                for (MenuRow m : menuRows) {
-                    if (m.checkBox.isSelected()) {
-                        int qty = (Integer) m.spinner.getValue();
-                        ps.setInt(1, qty);
-                        ps.setInt(2, m.id);
-                        ps.setInt(3, qty); // hanya kurangi jika stok cukup
-                        ps.addBatch();
-                    }
-                }
-                ps.executeBatch();
-            }
-
-            // Struk teks
+            // ── Tersimpan: baru susun & tampilkan struk ───────────────────────
             StringBuilder struk = new StringBuilder();
             struk.append("===== STRUK PEMBAYARAN =====\n");
             struk.append("Kode  : ").append(kode).append("\n");
@@ -661,6 +671,14 @@ public class Dashboard extends javax.swing.JFrame {
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this, "Gagal simpan transaksi:\n" + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    // Pastikan kolom bayar/kembalian ada (untuk database lama). Dijalankan di luar transaksi.
+    private void pastikanKolomBayarAda(Connection conn) {
+        try (PreparedStatement alt = conn.prepareStatement(
+            "ALTER TABLE transaksi ADD COLUMN IF NOT EXISTS bayar BIGINT DEFAULT 0, ADD COLUMN IF NOT EXISTS kembalian BIGINT DEFAULT 0")) {
+            alt.executeUpdate();
+        } catch (SQLException ignored) {}
     }
 
     // ── Dialog struk cantik ───────────────────────────────────────────────────
