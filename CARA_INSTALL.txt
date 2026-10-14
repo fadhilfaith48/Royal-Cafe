@@ -1,0 +1,49 @@
+====================================================
+  CARA INSTALL - ROYAL CAFE POS SYSTEM
+====================================================
+
+Aplikasi ini hanya bisa dijalankan di Windows (PC/Laptop),
+TIDAK bisa dibuka di HP (Android/iOS).
+
+----------------------------------------------------
+YANG DIBUTUHKAN
+----------------------------------------------------
+1. Java 17         -> https://adoptium.net
+2. XAMPP (MySQL)   -> https://www.apachefriends.org
+
+----------------------------------------------------
+LANGKAH INSTALL
+----------------------------------------------------
+1. Install Java 17.
+2. Install XAMPP.
+3. Buka XAMPP Control Panel, klik START pada MySQL (harus hijau).
+4. Import database:
+   - Buka http://localhost/phpmyadmin
+   - Klik "New" di panel kiri, nama database: faith_coffe -> Create
+   - Klik database faith_coffe, pilih tab "Import"
+   - Pilih file Royal_cofe.sql, klik Go
+5. Pastikan file berikut ada di satu folder yang sama:
+   RoyalCafe.exe, fadhil.jar, lib/, Royal_cofe.sql, CARA_INSTALL.txt
+6. Klik 2x RoyalCafe.exe untuk menjalankan aplikasi.
+
+----------------------------------------------------
+LOGIN
+----------------------------------------------------
+Tidak ada password default di file ini. Password disimpan
+sebagai hash di dalam database, jadi tidak ada yang bisa
+dibaca langsung dari file SQL.
+
+Minta admin membuat akun lewat tool PasswordTool, atau
+gunakan akun yang sudah dibuat sebelumnya.
+
+----------------------------------------------------
+TROUBLESHOOTING
+----------------------------------------------------
+- Error "driver not found":
+  Pastikan folder lib/ berada di folder yang sama dengan
+  RoyalCafe.exe.
+- Tidak bisa connect ke database:
+  Pastikan MySQL di XAMPP sudah START (ikon hijau).
+- Aplikasi tidak terbuka:
+  Pastikan Java 17 sudah terinstall.
+====================================================

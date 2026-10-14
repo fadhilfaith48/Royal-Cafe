@@ -21,7 +21,7 @@ Source: "C:\RoyalCafe_dist\RoyalCafe.exe"; DestDir: "{app}"; Flags: ignoreversio
 Source: "C:\RoyalCafe_dist\fadhil.jar"; DestDir: "{app}"; Flags: ignoreversion
 Source: "C:\RoyalCafe_dist\lib\*"; DestDir: "{app}\lib"; Flags: ignoreversion recursesubdirs
 Source: "C:\Users\user\OneDrive\Documents\Cafe Management Shop\Royal_cofe.sql"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\Users\user\OneDrive\Documents\Cafe Management Shop\dist\CARA_INSTALL.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "C:\Users\user\OneDrive\Documents\Cafe Management Shop\CARA_INSTALL.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Royal Cafe"; Filename: "{app}\RoyalCafe.exe"
