@@ -6,3 +6,5 @@ db.properties
 .env
 *.class
 *.jar
+!lib/mysql-connector-j-8.0.31.jar
+!lib/CopyLibs/org-netbeans-modules-java-j2seproject-copylibstask.jar

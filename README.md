@@ -35,7 +35,7 @@ Cafe Management Shop/
 │   ├── PasswordUtil.java       Hash/verifikasi password PBKDF2
 │   └── PasswordTool.java       CLI membuat & reset user
 ├── src/Image/                  Gambar menu
-├── lib/                        mysql-connector-j
+├── lib/                        Driver MySQL (mysql-connector-j) — sudah disertakan
 ├── nbproject/                  Konfigurasi build NetBeans
 ├── Royal_cofe.sql              Skema database + data menu
 ├── TUTORIAL_BUILD_EXE.txt      Panduan membuat file .exe
