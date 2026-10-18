@@ -37,7 +37,7 @@ public class Dashboard extends javax.swing.JFrame {
     private JPanel  menuGridPanel;
     private JTextArea  txtStruk;
     private JTextField txtSubtotal, txtPajak, txtTotal, txtBayar, txtKembalian;
-    private JButton btnBayar, btnReset, btnKelolaMenu, btnRiwayat, btnKeluar;
+    private JButton btnBayar, btnReset, btnKelolaMenu, btnKelolaUser, btnRiwayat, btnGantiPassword, btnKeluar;
 
     // ── Warna tema (sesuai login: header biru-ungu, bg abu-abu) ──────────────
     private static final Color HEADER_BG  = new Color(51, 0, 255);    // biru-ungu = login header
@@ -222,6 +222,15 @@ public class Dashboard extends javax.swing.JFrame {
         btnRiwayat.addActionListener(e -> new RiwayatTransaksi().setVisible(true));
         btnKeluar.addActionListener(e -> konfirmasiKeluar());
 
+        // Tombol admin: Kelola User, Kelola Menu, Edit Transaksi
+        btnKelolaUser = footBtn("\uD83D\uDC65 Kelola User", new Color(102, 0, 204));
+        btnKelolaUser.addActionListener(e -> bukaManajemenUser());
+        btnKelolaUser.setVisible("admin".equals(currentRole));
+
+        // Tombol Ganti Password (semua role)
+        btnGantiPassword = footBtn("\uD83D\uDD11 Ganti Password", new Color(0, 102, 153));
+        btnGantiPassword.addActionListener(e -> bukaGantiPassword());
+
         // Tombol Edit Transaksi — hanya admin
         JButton btnEdit = footBtn("\u270E Edit Transaksi", new Color(0, 128, 128));
         btnEdit.addActionListener(e -> bukaEditTransaksi());
@@ -230,7 +239,8 @@ public class Dashboard extends javax.swing.JFrame {
         btnKelolaMenu.setVisible("admin".equals(currentRole));
 
         p.add(btnBayar); p.add(btnReset); p.add(btnKelolaMenu);
-        p.add(btnRiwayat); p.add(btnEdit); p.add(btnKeluar);
+        p.add(btnKelolaUser); p.add(btnRiwayat); p.add(btnEdit);
+        p.add(btnGantiPassword); p.add(btnKeluar);
         return p;
     }
 
@@ -1157,6 +1167,150 @@ public class Dashboard extends javax.swing.JFrame {
     private void konfirmasiKeluar() {
         int c = JOptionPane.showConfirmDialog(this, "Yakin ingin keluar?", "Konfirmasi", JOptionPane.YES_NO_OPTION);
         if (c == JOptionPane.YES_OPTION) { new login().setVisible(true); dispose(); }
+    }
+
+    // ── Kelola User (admin only) ───────────────────────────────────────────────
+    private void bukaManajemenUser() {
+        ManajemenUser mu = new ManajemenUser(currentUser, this::loadMenuFromDB);
+        mu.setVisible(true);
+    }
+
+    // ── Ganti Password (semua role) ───────────────────────────────────────────
+    private void bukaGantiPassword() {
+        JDialog dlg = new JDialog(this, "Ganti Password", true);
+        dlg.setSize(400, 300);
+        dlg.setLocationRelativeTo(this);
+        dlg.setLayout(new BorderLayout());
+
+        // Header
+        JPanel pHdr = new JPanel(new BorderLayout());
+        pHdr.setBackground(new Color(51, 0, 255));
+        pHdr.setBorder(BorderFactory.createEmptyBorder(10, 16, 10, 16));
+        JLabel lblHdr = new JLabel("\uD83D\uDD11  Ganti Password");
+        lblHdr.setFont(new Font("Bell MT", Font.BOLD, 18));
+        lblHdr.setForeground(Color.WHITE);
+        pHdr.add(lblHdr, BorderLayout.WEST);
+
+        // Form
+        JPanel pForm = new JPanel(new GridLayout(4, 2, 8, 8));
+        pForm.setBackground(new Color(204, 204, 204));
+        pForm.setBorder(BorderFactory.createEmptyBorder(16, 20, 16, 20));
+
+        Font fBold = new Font("Times New Roman", Font.BOLD, 13);
+
+        JLabel lOld = new JLabel("Password Lama:"); lOld.setFont(fBold);
+        JPasswordField pfOld = new JPasswordField();
+        pfOld.setFont(fBold);
+
+        JLabel lNew = new JLabel("Password Baru:"); lNew.setFont(fBold);
+        JPasswordField pfNew = new JPasswordField();
+        pfNew.setFont(fBold);
+
+        JLabel lConf = new JLabel("Ulangi Password:"); lConf.setFont(fBold);
+        JPasswordField pfConf = new JPasswordField();
+        pfConf.setFont(fBold);
+
+        JLabel lInfo = new JLabel(""); lInfo.setFont(fBold);
+
+        pForm.add(lOld);   pForm.add(pfOld);
+        pForm.add(lNew);   pForm.add(pfNew);
+        pForm.add(lConf);  pForm.add(pfConf);
+        pForm.add(lInfo);  pForm.add(new JLabel());
+
+        // Buttons
+        JPanel pBtn = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 8));
+        pBtn.setBackground(new Color(204, 204, 204));
+
+        JButton btnSimpan = new JButton("Simpan");
+        btnSimpan.setBackground(new Color(0, 153, 76));
+        btnSimpan.setForeground(Color.WHITE);
+        btnSimpan.setFont(fBold); btnSimpan.setFocusPainted(false);
+        btnSimpan.setPreferredSize(new Dimension(110, 34));
+
+        JButton btnBatal = new JButton("Batal");
+        btnBatal.setBackground(new Color(204, 0, 0));
+        btnBatal.setForeground(Color.WHITE);
+        btnBatal.setFont(fBold); btnBatal.setFocusPainted(false);
+        btnBatal.setPreferredSize(new Dimension(110, 34));
+
+        btnSimpan.addActionListener(e -> {
+            char[] oldPwd = pfOld.getPassword();
+            char[] newPwd = pfNew.getPassword();
+            char[] confPwd = pfConf.getPassword();
+
+            try {
+                if (oldPwd.length == 0 || newPwd.length == 0 || confPwd.length == 0) {
+                    lInfo.setText("Semua field wajib diisi.");
+                    lInfo.setForeground(Color.RED);
+                    return;
+                }
+                if (newPwd.length < 4) {
+                    lInfo.setText("Password minimal 4 karakter.");
+                    lInfo.setForeground(Color.RED);
+                    return;
+                }
+                if (!java.util.Arrays.equals(newPwd, confPwd)) {
+                    lInfo.setText("Konfirmasi password tidak cocok.");
+                    lInfo.setForeground(Color.RED);
+                    return;
+                }
+
+                // Verifikasi password lama
+                String storedHash;
+                try (Connection conn = DBConnection.getConnection();
+                     PreparedStatement ps = conn.prepareStatement("SELECT password FROM users WHERE username=?")) {
+                    ps.setString(1, currentUser);
+                    ResultSet rs = ps.executeQuery();
+                    if (rs.next()) {
+                        storedHash = rs.getString("password");
+                    } else {
+                        lInfo.setText("User tidak ditemukan.");
+                        lInfo.setForeground(Color.RED);
+                        return;
+                    }
+                }
+
+                if (!PasswordUtil.verify(oldPwd, storedHash)) {
+                    lInfo.setText("Password lama salah.");
+                    lInfo.setForeground(Color.RED);
+                    return;
+                }
+
+                // Hash password baru
+                String newHash = PasswordUtil.hash(newPwd);
+
+                // Update ke database
+                try (Connection conn = DBConnection.getConnection();
+                     PreparedStatement ps = conn.prepareStatement("UPDATE users SET password=? WHERE username=?")) {
+                    ps.setString(1, newHash);
+                    ps.setString(2, currentUser);
+                    ps.executeUpdate();
+                }
+
+                JOptionPane.showMessageDialog(dlg,
+                    "Password berhasil diganti!\nSilakan login ulang dengan password baru.",
+                    "Berhasil", JOptionPane.INFORMATION_MESSAGE);
+                dlg.dispose();
+                new login().setVisible(true);
+                dispose();
+
+            } catch (SQLException ex) {
+                lInfo.setText("Gagal: " + ex.getMessage());
+                lInfo.setForeground(Color.RED);
+            } finally {
+                java.util.Arrays.fill(oldPwd, '\0');
+                java.util.Arrays.fill(newPwd, '\0');
+                java.util.Arrays.fill(confPwd, '\0');
+            }
+        });
+        btnBatal.addActionListener(e -> dlg.dispose());
+
+        pBtn.add(btnSimpan); pBtn.add(btnBatal);
+
+        dlg.add(pHdr,  BorderLayout.NORTH);
+        dlg.add(pForm, BorderLayout.CENTER);
+        dlg.add(pBtn,  BorderLayout.SOUTH);
+        dlg.setVisible(true);
     }
 
     // ── Jam berjalan ──────────────────────────────────────────────────────────
