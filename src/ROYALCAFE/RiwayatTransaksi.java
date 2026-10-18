@@ -1,6 +1,12 @@
 package ROYALCAFE;
 
+import java.awt.*;
 import java.sql.*;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.List;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 
@@ -11,6 +17,14 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
 
     private DefaultTableModel modelTransaksi;
     private DefaultTableModel modelDetail;
+
+    // Filter & pagination state
+    private Date filterDari = null;
+    private Date filterSampai = null;
+    private int currentPage = 0;
+    private static final int PAGE_SIZE = 20;
+    private int totalPages = 0;
+    private int totalRecords = 0;
 
     public RiwayatTransaksi() {
         initComponents();
@@ -45,10 +59,29 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
 
     private void loadTransaksi() {
         modelTransaksi.setRowCount(0);
-        String sql = "SELECT * FROM transaksi ORDER BY tanggal DESC";
+
+        // Build query with filter and pagination
+        StringBuilder sql = new StringBuilder("SELECT * FROM transaksi WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+
+        if (filterDari != null) {
+            sql.append(" AND DATE(tanggal) >= ?");
+            params.add(new java.sql.Date(filterDari.getTime()));
+        }
+        if (filterSampai != null) {
+            sql.append(" AND DATE(tanggal) <= ?");
+            params.add(new java.sql.Date(filterSampai.getTime()));
+        }
+        sql.append(" ORDER BY tanggal DESC LIMIT ? OFFSET ?");
+        params.add(PAGE_SIZE);
+        params.add(currentPage * PAGE_SIZE);
+
         try (Connection conn = DBConnection.getConnection();
-             Statement st = conn.createStatement();
-             ResultSet rs = st.executeQuery(sql)) {
+             PreparedStatement ps = conn.prepareStatement(sql.toString())) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+            ResultSet rs = ps.executeQuery();
             while (rs.next()) {
                 modelTransaksi.addRow(new Object[]{
                     rs.getString("kode_transaksi"),
@@ -63,6 +96,60 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
             }
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this, "Gagal memuat transaksi: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        }
+
+        // Update pagination info
+        updatePaginationInfo();
+        updatePaginationButtons();
+    }
+
+    private void countTotalRecords() {
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM transaksi WHERE 1=1");
+        List<Object> params = new ArrayList<>();
+
+        if (filterDari != null) {
+            sql.append(" AND DATE(tanggal) >= ?");
+            params.add(new java.sql.Date(filterDari.getTime()));
+        }
+        if (filterSampai != null) {
+            sql.append(" AND DATE(tanggal) <= ?");
+            params.add(new java.sql.Date(filterSampai.getTime()));
+        }
+
+        try (Connection conn = DBConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql.toString())) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                totalRecords = rs.getInt(1);
+                totalPages = (int) Math.ceil((double) totalRecords / PAGE_SIZE);
+                if (totalPages == 0) totalPages = 1;
+            }
+        } catch (SQLException e) {
+            totalRecords = 0;
+            totalPages = 1;
+        }
+    }
+
+    private void updatePaginationInfo() {
+        countTotalRecords();
+        int start = totalRecords == 0 ? 0 : currentPage * PAGE_SIZE + 1;
+        int end = Math.min((currentPage + 1) * PAGE_SIZE, totalRecords);
+        lblPaginationInfo.setText(String.format("Menampilkan %d-%d dari %d data (Halaman %d/%d)",
+                start, end, totalRecords, currentPage + 1, totalPages));
+    }
+
+    private void updatePaginationButtons() {
+        btnPrev.setEnabled(currentPage > 0);
+        btnNext.setEnabled(currentPage < totalPages - 1);
+    }
+
+    private void goToPage(int page) {
+        if (page >= 0 && page < totalPages) {
+            currentPage = page;
+            loadTransaksi();
         }
     }
 
@@ -413,10 +500,62 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
         return s.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)").replace("\r", "").replace("\n", " ");
     }
 
+    // ── Filter preset helpers ───────────────────────────────────────────────
+    private void setPresetFilter(int preset) {
+        Calendar cal = Calendar.getInstance();
+        switch (preset) {
+            case 0: // Hari ini
+                filterDari = cal.getTime();
+                filterSampai = cal.getTime();
+                break;
+            case 1: // 7 hari terakhir
+                cal.add(Calendar.DAY_OF_MONTH, -6);
+                filterDari = cal.getTime();
+                filterSampai = new Date(); // hari ini
+                break;
+            case 2: // Bulan ini
+                cal.set(Calendar.DAY_OF_MONTH, 1);
+                filterDari = cal.getTime();
+                filterSampai = new Date();
+                break;
+            case -1: // Semua (reset)
+            default:
+                filterDari = null;
+                filterSampai = null;
+                break;
+        }
+        // Update text fields
+        SimpleDateFormat df = new SimpleDateFormat("dd/MM/yyyy");
+        txtDari.setValue(filterDari != null ? df.format(filterDari) : null);
+        txtSampai.setValue(filterSampai != null ? df.format(filterSampai) : null);
+        // Reset to first page and reload
+        currentPage = 0;
+        loadTransaksi();
+    }
+
+    private void applyFilter() {
+        SimpleDateFormat df = new SimpleDateFormat("dd/MM/yyyy");
+        try {
+            Object dariVal = txtDari.getValue();
+            Object sampaiVal = txtSampai.getValue();
+
+            filterDari = (dariVal != null && dariVal instanceof Date) ? (Date) dariVal : null;
+            filterSampai = (sampaiVal != null && sampaiVal instanceof Date) ? (Date) sampaiVal : null;
+
+            if (filterDari != null && filterSampai != null && filterDari.after(filterSampai)) {
+                JOptionPane.showMessageDialog(this, "Tanggal 'Dari' tidak boleh lebih besar dari 'Sampai'.", "Validasi", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            currentPage = 0;
+            loadTransaksi();
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Format tanggal tidak valid. Gunakan dd/MM/yyyy.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private void initComponents() {
         jPanel1 = new javax.swing.JPanel();
         jLabelTitle = new javax.swing.JLabel();
-        jSplitPane1 = new javax.swing.JSplitPane(javax.swing.JSplitPane.VERTICAL_SPLIT);
         jScrollPane1 = new javax.swing.JScrollPane();
         tblTransaksi = new javax.swing.JTable();
         jScrollPane2 = new javax.swing.JScrollPane();
@@ -425,17 +564,33 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
         btnRefresh = new javax.swing.JButton();
         btnKembali = new javax.swing.JButton();
         btnCetakPDF = new javax.swing.JButton();
+        // Filter components
+        JPanel pnlFilter = new javax.swing.JPanel();
+        JLabel lblDari = new javax.swing.JLabel();
+        txtDari = new javax.swing.JFormattedTextField();
+        JLabel lblSampai = new javax.swing.JLabel();
+        txtSampai = new javax.swing.JFormattedTextField();
+        btnFilterHariIni = new javax.swing.JButton();
+        btnFilter7Hari = new javax.swing.JButton();
+        btnFilterBulanIni = new javax.swing.JButton();
+        btnFilterSemua = new javax.swing.JButton();
+        btnTerapkanFilter = new javax.swing.JButton();
+        // Pagination components
+        JPanel pnlPagination = new javax.swing.JPanel();
+        btnPrev = new javax.swing.JButton();
+        lblPaginationInfo = new javax.swing.JLabel();
+        btnNext = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.DISPOSE_ON_CLOSE);
-        setTitle("Riwayat Transaksi - Royal Cofe");
-        setPreferredSize(new java.awt.Dimension(800, 600));
+        setTitle("Riwayat Transaksi - Royal Cafe");
+        setPreferredSize(new java.awt.Dimension(900, 650));
 
         // Header biru-ungu sesuai tema login
         jPanel1.setBackground(new java.awt.Color(51, 0, 255));
         jLabelTitle.setFont(new java.awt.Font("Bell MT", 3, 22));
         jLabelTitle.setForeground(java.awt.Color.WHITE);
         jLabelTitle.setHorizontalAlignment(SwingConstants.CENTER);
-        jLabelTitle.setText("Riwayat Transaksi - Royal Cofe");
+        jLabelTitle.setText("Riwayat Transaksi - Royal Cafe");
 
         javax.swing.GroupLayout p1 = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(p1);
@@ -444,9 +599,6 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
 
         // Background abu-abu sesuai tema login
         getContentPane().setBackground(new java.awt.Color(204, 204, 204));
-
-        jScrollPane1.setViewportView(tblTransaksi);
-        jScrollPane2.setViewportView(tblDetail);
 
         // Warna header tabel
         tblTransaksi.getTableHeader().setBackground(new java.awt.Color(51, 0, 255));
@@ -465,10 +617,100 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
         tblDetail.setFont(new java.awt.Font("Times New Roman", java.awt.Font.PLAIN, 12));
         tblDetail.setRowHeight(22);
 
+        jScrollPane1.setViewportView(tblTransaksi);
+        jScrollPane2.setViewportView(tblDetail);
+
         jLabelDetail.setFont(new java.awt.Font("Bell MT", java.awt.Font.BOLD, 14));
         jLabelDetail.setForeground(new java.awt.Color(51, 0, 255));
         jLabelDetail.setText("Detail Transaksi:");
 
+        // Filter panel
+        pnlFilter.setBackground(new java.awt.Color(204, 204, 204));
+        pnlFilter.setBorder(javax.swing.BorderFactory.createTitledBorder(
+            javax.swing.BorderFactory.createLineBorder(new java.awt.Color(51, 0, 255), 2),
+            "Filter Tanggal",
+            javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION,
+            javax.swing.border.TitledBorder.DEFAULT_POSITION,
+            new java.awt.Font("Bell MT", java.awt.Font.BOLD, 13),
+            new java.awt.Color(51, 0, 255)
+        ));
+
+        lblDari.setText("Dari:");
+        lblDari.setFont(new java.awt.Font("Times New Roman", java.awt.Font.BOLD, 13));
+
+        SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
+        txtDari = new javax.swing.JFormattedTextField(dateFormat);
+        txtDari.setPreferredSize(new java.awt.Dimension(110, 28));
+        txtDari.setFont(new java.awt.Font("Times New Roman", java.awt.Font.PLAIN, 13));
+
+        lblSampai.setText("Sampai:");
+        lblSampai.setFont(new java.awt.Font("Times New Roman", java.awt.Font.BOLD, 13));
+
+        txtSampai = new javax.swing.JFormattedTextField(dateFormat);
+        txtSampai.setPreferredSize(new java.awt.Dimension(110, 28));
+        txtSampai.setFont(new java.awt.Font("Times New Roman", java.awt.Font.PLAIN, 13));
+
+        btnFilterHariIni.setText("Hari Ini");
+        btnFilterHariIni.setBackground(new java.awt.Color(51, 0, 255));
+        btnFilterHariIni.setForeground(java.awt.Color.WHITE);
+        btnFilterHariIni.setFont(new java.awt.Font("Times New Roman", java.awt.Font.BOLD, 12));
+        btnFilterHariIni.setFocusPainted(false);
+        btnFilterHariIni.addActionListener(e -> setPresetFilter(0));
+
+        btnFilter7Hari.setText("7 Hari");
+        btnFilter7Hari.setBackground(new java.awt.Color(51, 0, 255));
+        btnFilter7Hari.setForeground(java.awt.Color.WHITE);
+        btnFilter7Hari.setFont(new java.awt.Font("Times New Roman", java.awt.Font.BOLD, 12));
+        btnFilter7Hari.setFocusPainted(false);
+        btnFilter7Hari.addActionListener(e -> setPresetFilter(1));
+
+        btnFilterBulanIni.setText("Bulan Ini");
+        btnFilterBulanIni.setBackground(new java.awt.Color(51, 0, 255));
+        btnFilterBulanIni.setForeground(java.awt.Color.WHITE);
+        btnFilterBulanIni.setFont(new java.awt.Font("Times New Roman", java.awt.Font.BOLD, 12));
+        btnFilterBulanIni.setFocusPainted(false);
+        btnFilterBulanIni.addActionListener(e -> setPresetFilter(2));
+
+        btnFilterSemua.setText("Semua");
+        btnFilterSemua.setBackground(new java.awt.Color(100, 100, 100));
+        btnFilterSemua.setForeground(java.awt.Color.WHITE);
+        btnFilterSemua.setFont(new java.awt.Font("Times New Roman", java.awt.Font.BOLD, 12));
+        btnFilterSemua.setFocusPainted(false);
+        btnFilterSemua.addActionListener(e -> setPresetFilter(-1));
+
+        btnTerapkanFilter.setText("Terapkan");
+        btnTerapkanFilter.setBackground(new java.awt.Color(0, 153, 76));
+        btnTerapkanFilter.setForeground(java.awt.Color.WHITE);
+        btnTerapkanFilter.setFont(new java.awt.Font("Times New Roman", java.awt.Font.BOLD, 13));
+        btnTerapkanFilter.setFocusPainted(false);
+        btnTerapkanFilter.addActionListener(e -> applyFilter());
+
+        javax.swing.GroupLayout pnlFilterLayout = new javax.swing.GroupLayout(pnlFilter);
+        pnlFilter.setLayout(pnlFilterLayout);
+        pnlFilterLayout.setHorizontalGroup(pnlFilterLayout.createParallelGroup()
+            .addGroup(pnlFilterLayout.createSequentialGroup().addGap(10)
+                .addComponent(lblDari).addGap(5)
+                .addComponent(txtDari, 110, 110, 110).addGap(10)
+                .addComponent(lblSampai).addGap(5)
+                .addComponent(txtSampai, 110, 110, 110).addGap(15)
+                .addComponent(btnFilterHariIni, 80, 80, 80).addGap(5)
+                .addComponent(btnFilter7Hari, 80, 80, 80).addGap(5)
+                .addComponent(btnFilterBulanIni, 80, 80, 80).addGap(5)
+                .addComponent(btnFilterSemua, 80, 80, 80).addGap(15)
+                .addComponent(btnTerapkanFilter, 100, 100, 100)
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+        );
+        pnlFilterLayout.setVerticalGroup(pnlFilterLayout.createSequentialGroup().addGap(10)
+            .addGroup(pnlFilterLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                .addComponent(lblDari).addComponent(txtDari)
+                .addComponent(lblSampai).addComponent(txtSampai)
+                .addComponent(btnFilterHariIni).addComponent(btnFilter7Hari)
+                .addComponent(btnFilterBulanIni).addComponent(btnFilterSemua)
+                .addComponent(btnTerapkanFilter))
+            .addGap(10)
+        );
+
+        // Buttons
         btnRefresh.setText("Refresh");
         btnRefresh.setBackground(new java.awt.Color(51, 0, 255));
         btnRefresh.setForeground(java.awt.Color.WHITE);
@@ -490,13 +732,60 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
         btnCetakPDF.setFocusPainted(false);
         btnCetakPDF.addActionListener(e -> cetakPDF());
 
+        // Pagination panel
+        pnlPagination.setBackground(new java.awt.Color(204, 204, 204));
+
+        btnPrev.setText("◀ Sebelumnya");
+        btnPrev.setBackground(new java.awt.Color(51, 0, 255));
+        btnPrev.setForeground(java.awt.Color.WHITE);
+        btnPrev.setFont(new java.awt.Font("Times New Roman", java.awt.Font.BOLD, 12));
+        btnPrev.setFocusPainted(false);
+        btnPrev.setPreferredSize(new java.awt.Dimension(120, 32));
+        btnPrev.addActionListener(e -> goToPage(currentPage - 1));
+
+        lblPaginationInfo.setText("Menampilkan 0-0 dari 0 data (Halaman 1/1)");
+        lblPaginationInfo.setFont(new java.awt.Font("Times New Roman", java.awt.Font.PLAIN, 13));
+        lblPaginationInfo.setForeground(new java.awt.Color(51, 0, 255));
+        lblPaginationInfo.setHorizontalAlignment(SwingConstants.CENTER);
+
+        btnNext.setText("Selanjutnya ▶");
+        btnNext.setBackground(new java.awt.Color(51, 0, 255));
+        btnNext.setForeground(java.awt.Color.WHITE);
+        btnNext.setFont(new java.awt.Font("Times New Roman", java.awt.Font.BOLD, 12));
+        btnNext.setFocusPainted(false);
+        btnNext.setPreferredSize(new java.awt.Dimension(120, 32));
+        btnNext.addActionListener(e -> goToPage(currentPage + 1));
+
+        javax.swing.GroupLayout pnlPaginationLayout = new javax.swing.GroupLayout(pnlPagination);
+        pnlPagination.setLayout(pnlPaginationLayout);
+        pnlPaginationLayout.setHorizontalGroup(pnlPaginationLayout.createParallelGroup()
+            .addGroup(pnlPaginationLayout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(btnPrev, 120, 120, 120)
+                .addGap(10)
+                .addComponent(lblPaginationInfo, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGap(10)
+                .addComponent(btnNext, 120, 120, 120)
+                .addContainerGap())
+        );
+        pnlPaginationLayout.setVerticalGroup(pnlPaginationLayout.createSequentialGroup()
+            .addGap(5)
+            .addGroup(pnlPaginationLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                .addComponent(btnPrev, 32, 32, 32)
+                .addComponent(lblPaginationInfo, 32, 32, 32)
+                .addComponent(btnNext, 32, 32, 32))
+            .addGap(5)
+        );
+
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
         layout.setHorizontalGroup(layout.createParallelGroup()
             .addComponent(jPanel1)
             .addGroup(layout.createSequentialGroup().addGap(10)
                 .addGroup(layout.createParallelGroup()
+                    .addComponent(pnlFilter)
                     .addComponent(jScrollPane1)
+                    .addComponent(pnlPagination)
                     .addComponent(jLabelDetail)
                     .addComponent(jScrollPane2)
                     .addGroup(layout.createSequentialGroup()
@@ -505,7 +794,9 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
         );
         layout.setVerticalGroup(layout.createSequentialGroup()
             .addComponent(jPanel1, 50, 50, 50).addGap(10)
+            .addComponent(pnlFilter).addGap(10)
             .addComponent(jScrollPane1, 200, 200, 200).addGap(10)
+            .addComponent(pnlPagination, 42, 42, 42).addGap(10)
             .addComponent(jLabelDetail).addGap(5)
             .addComponent(jScrollPane2, 150, 150, 150).addGap(10)
             .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
@@ -516,6 +807,16 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
         pack();
     }
 
+    // Filter & pagination fields
+    private javax.swing.JPanel pnlFilter;
+    private javax.swing.JLabel lblDari, lblSampai;
+    private javax.swing.JFormattedTextField txtDari, txtSampai;
+    private javax.swing.JButton btnFilterHariIni, btnFilter7Hari, btnFilterBulanIni, btnFilterSemua, btnTerapkanFilter;
+    private javax.swing.JPanel pnlPagination;
+    private javax.swing.JButton btnPrev, btnNext;
+    private javax.swing.JLabel lblPaginationInfo;
+
+    // Original fields
     private javax.swing.JPanel jPanel1;
     private javax.swing.JLabel jLabelTitle, jLabelDetail;
     private javax.swing.JSplitPane jSplitPane1;
