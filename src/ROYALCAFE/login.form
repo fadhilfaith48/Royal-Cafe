@@ -156,7 +156,7 @@
             <Property name="text" type="java.lang.String" value="Password"/>
           </Properties>
         </Component>
-        <Component class="javax.swing.JTextField" name="jTextField2">
+        <Component class="javax.swing.JPasswordField" name="jTextField2">
         </Component>
         <Component class="javax.swing.JTextField" name="jTextField3">
         </Component>

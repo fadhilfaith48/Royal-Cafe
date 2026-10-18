@@ -6,7 +6,7 @@ import java.sql.ResultSet;
 import javax.swing.JOptionPane;
 
 /**
- * Login Form - Cafe Senja
+ * Login Form - Royal Cafe
  */
 public class login extends javax.swing.JFrame {
 
@@ -31,7 +31,7 @@ public class login extends javax.swing.JFrame {
         jLabel1 = new javax.swing.JLabel();
         jLabel2 = new javax.swing.JLabel();
         jLabel3 = new javax.swing.JLabel();
-        jTextField2 = new javax.swing.JTextField();
+        jTextField2 = new javax.swing.JPasswordField();
         jTextField3 = new javax.swing.JTextField();
         jButton1 = new javax.swing.JButton();
 
@@ -125,9 +125,10 @@ public class login extends javax.swing.JFrame {
 
     private void doLogin() {
         String username = jTextField3.getText().trim();
-        String password = jTextField2.getText().trim();
+        char[] password = jTextField2.getPassword();
 
-        if (username.isEmpty() || password.isEmpty()) {
+        if (username.isEmpty() || password.length == 0 || new String(password).trim().isEmpty()) {
+            java.util.Arrays.fill(password, '\0');
             JOptionPane.showMessageDialog(this, "Username dan password tidak boleh kosong!", "Peringatan", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -146,7 +147,7 @@ public class login extends javax.swing.JFrame {
                 storedHash = rs.getString("password");
             }
 
-            if (role != null && PasswordUtil.verify(password.toCharArray(), storedHash)) {
+            if (role != null && PasswordUtil.verify(password, storedHash)) {
                 Dashboard dashboard = new Dashboard(username, role);
                 dashboard.setVisible(true);
                 this.dispose();
@@ -161,6 +162,8 @@ public class login extends javax.swing.JFrame {
                 "Koneksi database gagal:\n" + e.getMessage()
                 + "\n\nPastikan:\n- MySQL sudah berjalan (XAMPP/WAMP)\n- Database faith_coffe sudah dibuat\n- Variabel DB_PASS sudah diset sesuai password MySQL kamu",
                 "Error Koneksi", JOptionPane.ERROR_MESSAGE);
+        } finally {
+            java.util.Arrays.fill(password, '\0');
         }
     }
 
@@ -186,7 +189,7 @@ public class login extends javax.swing.JFrame {
     private javax.swing.JLabel jLabel4;
     private javax.swing.JPanel jPanel1;
     private javax.swing.JPanel jPanel2;
-    private javax.swing.JTextField jTextField2;
+    private javax.swing.JPasswordField jTextField2;
     private javax.swing.JTextField jTextField3;
     // End of variables declaration//GEN-END:variables
 }
