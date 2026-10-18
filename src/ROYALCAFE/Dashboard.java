@@ -21,6 +21,7 @@ public class Dashboard extends javax.swing.JFrame {
     private String currentRole = "kasir";
     private String lastStruk   = "";
     private long   bayarInput  = 0;
+    private volatile boolean clockRunning = true;
 
     // ── Data menu ─────────────────────────────────────────────────────────────
     private static class MenuRow {
@@ -76,6 +77,17 @@ public class Dashboard extends javax.swing.JFrame {
         root.add(buildFooter(),  BorderLayout.SOUTH);
 
         setContentPane(root);
+
+        // Hentikan thread jam saat jendela ditutup/dispose agar tidak menumpuk
+        // setiap kali user login ulang.
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowClosing(java.awt.event.WindowEvent e) {
+                clockRunning = false;
+            }
+            @Override public void windowClosed(java.awt.event.WindowEvent e) {
+                clockRunning = false;
+            }
+        });
     }
 
     // ── Header ────────────────────────────────────────────────────────────────
@@ -323,7 +335,7 @@ public class Dashboard extends javax.swing.JFrame {
         lblNama.setForeground(new Color(30, 30, 80));
         lblNama.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        JLabel lblHarga = new JLabel("Rp " + String.format("%,d", m.harga).replace(',', '.'));
+        JLabel lblHarga = new JLabel("Rp " + Rupiah.format(m.harga));
         lblHarga.setFont(new Font("Times New Roman", Font.BOLD, 13));
         lblHarga.setForeground(PRICE_GREEN);
         lblHarga.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -392,7 +404,7 @@ public class Dashboard extends javax.swing.JFrame {
                 sb.append(String.format("%-18s x%d\n  = Rp %s\n",
                     m.nama.length() > 18 ? m.nama.substring(0, 16) + ".." : m.nama,
                     qty,
-                    String.format("%,d", sub).replace(',', '.')));
+                    Rupiah.format(sub)));
             }
         }
         int pajak      = (int) Math.round(subtotal * 0.1);
@@ -408,7 +420,7 @@ public class Dashboard extends javax.swing.JFrame {
     }
 
     private String fmt(long v) {
-        return String.format("%,d", v).replace(',', '.');
+        return Rupiah.format(v);
     }
 
     // ── Proses bayar ──────────────────────────────────────────────────────────
@@ -667,6 +679,10 @@ public class Dashboard extends javax.swing.JFrame {
                 menuRows, subtotal, pajak, totalInt, bayar, kembalian);
             reset();
             loadMenuFromDB(); // refresh stok di kartu menu
+            // reset()/hitungTotal() mengosongkan panel total; tampilkan kembali
+            // nominal pembayaran terakhir supaya kasir masih bisa melihatnya.
+            txtBayar.setText("Rp " + fmt(bayar));
+            txtKembalian.setText("Rp " + fmt(kembalian));
 
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this, "Gagal simpan transaksi:\n" + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
@@ -674,11 +690,33 @@ public class Dashboard extends javax.swing.JFrame {
     }
 
     // Pastikan kolom bayar/kembalian ada (untuk database lama). Dijalankan di luar transaksi.
+    // Catatan: MySQL tidak mendukung "ADD COLUMN IF NOT EXISTS" (itu sintaks MariaDB),
+    // jadi kolom dicek lewat metadata lalu ditambahkan satu per satu bila belum ada.
     private void pastikanKolomBayarAda(Connection conn) {
-        try (PreparedStatement alt = conn.prepareStatement(
-            "ALTER TABLE transaksi ADD COLUMN IF NOT EXISTS bayar BIGINT DEFAULT 0, ADD COLUMN IF NOT EXISTS kembalian BIGINT DEFAULT 0")) {
-            alt.executeUpdate();
-        } catch (SQLException ignored) {}
+        boolean adaBayar = false;
+        boolean adaKembalian = false;
+        try (ResultSet rs = conn.getMetaData().getColumns(
+                conn.getCatalog(), null, "transaksi", null)) {
+            while (rs.next()) {
+                String kolom = rs.getString("COLUMN_NAME");
+                if ("bayar".equalsIgnoreCase(kolom))     adaBayar = true;
+                if ("kembalian".equalsIgnoreCase(kolom)) adaKembalian = true;
+            }
+        } catch (SQLException e) {
+            System.err.println("Peringatan: gagal membaca metadata tabel transaksi: " + e.getMessage());
+            return;
+        }
+
+        try (Statement st = conn.createStatement()) {
+            if (!adaBayar) {
+                st.executeUpdate("ALTER TABLE transaksi ADD COLUMN bayar BIGINT DEFAULT 0");
+            }
+            if (!adaKembalian) {
+                st.executeUpdate("ALTER TABLE transaksi ADD COLUMN kembalian BIGINT DEFAULT 0");
+            }
+        } catch (SQLException e) {
+            System.err.println("Peringatan: gagal menambah kolom bayar/kembalian: " + e.getMessage());
+        }
     }
 
     // ── Dialog struk cantik ───────────────────────────────────────────────────
@@ -1124,8 +1162,9 @@ public class Dashboard extends javax.swing.JFrame {
     // ── Jam berjalan ──────────────────────────────────────────────────────────
     private void startClock() {
         Thread t = new Thread(() -> {
-            while (true) {
-                try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
+            while (clockRunning) {
+                try { Thread.sleep(1000); } catch (InterruptedException e) { return; }
+                if (!clockRunning) break;
                 String now = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss").format(new java.util.Date());
                 SwingUtilities.invokeLater(() -> lblClock.setText(now));
             }

@@ -5,7 +5,7 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 
 /**
- * Riwayat Transaksi - Cafe Senja
+ * Riwayat Transaksi - Royal Cafe
  */
 public class RiwayatTransaksi extends javax.swing.JFrame {
 
@@ -53,11 +53,11 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
                 modelTransaksi.addRow(new Object[]{
                     rs.getString("kode_transaksi"),
                     rs.getString("kasir"),
-                    "Rp " + String.format("%,d", rs.getInt("subtotal")),
-                    "Rp " + String.format("%,d", rs.getInt("pajak")),
-                    "Rp " + String.format("%,d", rs.getInt("total")),
-                    "Rp " + String.format("%,d", rs.getLong("bayar")),
-                    "Rp " + String.format("%,d", rs.getLong("kembalian")),
+                    "Rp " + Rupiah.format(rs.getInt("subtotal")),
+                    "Rp " + Rupiah.format(rs.getInt("pajak")),
+                    "Rp " + Rupiah.format(rs.getInt("total")),
+                    "Rp " + Rupiah.format(rs.getLong("bayar")),
+                    "Rp " + Rupiah.format(rs.getLong("kembalian")),
                     rs.getTimestamp("tanggal")
                 });
             }
@@ -79,9 +79,9 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
             while (rs.next()) {
                 modelDetail.addRow(new Object[]{
                     rs.getString("nama_menu"),
-                    "Rp " + String.format("%,d", rs.getInt("harga")),
+                    "Rp " + Rupiah.format(rs.getInt("harga")),
                     rs.getInt("qty"),
-                    "Rp " + String.format("%,d", rs.getInt("subtotal"))
+                    "Rp " + Rupiah.format(rs.getInt("subtotal"))
                 });
             }
         } catch (SQLException e) {
@@ -123,7 +123,7 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
                 items.add(new String[]{
                     rs.getString("nama_menu"),
                     String.valueOf(rs.getInt("qty")),
-                    "Rp " + String.format("%,d", rs.getInt("subtotal")).replace(',', '.')
+                    "Rp " + Rupiah.format(rs.getInt("subtotal"))
                 });
             }
         } catch (SQLException e) {

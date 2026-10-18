@@ -5,7 +5,7 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 
 /**
- * Menu CRUD Management Form - Cafe Faith
+ * Menu CRUD Management Form - Royal Cafe
  * Hanya bisa diakses oleh admin
  */
 public class MenuCRUD extends javax.swing.JFrame {
@@ -46,6 +46,25 @@ public class MenuCRUD extends javax.swing.JFrame {
         // Sembunyikan kolom ID
         jTable1.getColumnModel().getColumn(0).setMinWidth(0);
         jTable1.getColumnModel().getColumn(0).setMaxWidth(0);
+
+        // Tampilkan harga dengan format Rupiah yang konsisten (titik ribuan).
+        // Nilai asli di model tetap Integer agar form edit masih bisa mem-parse-nya.
+        javax.swing.table.DefaultTableCellRenderer hargaRenderer =
+                new javax.swing.table.DefaultTableCellRenderer() {
+            @Override
+            public java.awt.Component getTableCellRendererComponent(
+                    javax.swing.JTable table, Object value, boolean isSelected,
+                    boolean hasFocus, int row, int column) {
+                Object tampil = (value instanceof Number)
+                        ? "Rp " + Rupiah.format(((Number) value).longValue())
+                        : value;
+                java.awt.Component c = super.getTableCellRendererComponent(
+                        table, tampil, isSelected, hasFocus, row, column);
+                setHorizontalAlignment(SwingConstants.RIGHT);
+                return c;
+            }
+        };
+        jTable1.getColumnModel().getColumn(3).setCellRenderer(hargaRenderer);
     }
 
     private void loadMenuData() {
@@ -76,10 +95,25 @@ public class MenuCRUD extends javax.swing.JFrame {
         int row = jTable1.getSelectedRow();
         if (row < 0) return;
         txtNama.setText(tableModel.getValueAt(row, 1).toString());
-        cmbKategori.setSelectedItem(tableModel.getValueAt(row, 2).toString());
+        String namaKategori = tableModel.getValueAt(row, 2).toString();
+        pastikanKategoriAda(namaKategori);
+        cmbKategori.setSelectedItem(namaKategori);
         txtHarga.setText(tableModel.getValueAt(row, 3).toString());
         txtStok.setText(tableModel.getValueAt(row, 4).toString());
         txtGambar.setText(tableModel.getValueAt(row, 5) != null ? tableModel.getValueAt(row, 5).toString() : "");
+    }
+
+    /**
+     * Pastikan kategori dari database ada di combo box. Tanpa ini,
+     * setSelectedItem() akan gagal diam-diam untuk kategori yang tidak
+     * terdaftar (mis. data lama "Kopi") dan update bisa memakai kategori salah.
+     */
+    private void pastikanKategoriAda(String kategori) {
+        if (kategori == null || kategori.trim().isEmpty()) return;
+        for (int i = 0; i < cmbKategori.getItemCount(); i++) {
+            if (kategori.equals(cmbKategori.getItemAt(i))) return;
+        }
+        cmbKategori.addItem(kategori);
     }
 
     private void clearForm() {
@@ -96,11 +130,21 @@ public class MenuCRUD extends javax.swing.JFrame {
             JOptionPane.showMessageDialog(this, "Nama menu tidak boleh kosong!", "Validasi", JOptionPane.WARNING_MESSAGE);
             return false;
         }
+        int harga;
+        int stok;
         try {
-            Integer.parseInt(txtHarga.getText().trim());
-            Integer.parseInt(txtStok.getText().trim());
+            harga = Integer.parseInt(txtHarga.getText().trim());
+            stok  = Integer.parseInt(txtStok.getText().trim());
         } catch (NumberFormatException e) {
             JOptionPane.showMessageDialog(this, "Harga dan stok harus berupa angka!", "Validasi", JOptionPane.WARNING_MESSAGE);
+            return false;
+        }
+        if (harga <= 0) {
+            JOptionPane.showMessageDialog(this, "Harga harus lebih dari 0!", "Validasi", JOptionPane.WARNING_MESSAGE);
+            return false;
+        }
+        if (stok < 0) {
+            JOptionPane.showMessageDialog(this, "Stok tidak boleh negatif!", "Validasi", JOptionPane.WARNING_MESSAGE);
             return false;
         }
         return true;
