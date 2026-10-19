@@ -22,6 +22,8 @@ public class Dashboard extends javax.swing.JFrame {
     private String lastStruk   = "";
     private long   bayarInput  = 0;
     private volatile boolean clockRunning = true;
+    private JLabel lblPajak;          // label dinamis "Pajak (X%)"
+    private int pajakPersen = 10;     // default 10%, akan di-load dari DB
 
     // ── Data menu ─────────────────────────────────────────────────────────────
     private static class MenuRow {
@@ -58,6 +60,9 @@ public class Dashboard extends javax.swing.JFrame {
         this.currentRole = role;
         buildUI();
         startClock();
+        Pengaturan.loadAll();           // muat pajak & pengaturan lain dari DB
+        pajakPersen = Pengaturan.getInt("pajak_persen", 10);
+        updatePajakLabel();             // perbarui label "Pajak (X%)"
         loadMenuFromDB();
     }
 
@@ -189,7 +194,8 @@ public class Dashboard extends javax.swing.JFrame {
         txtKembalian = roField("Rp 0", PRICE_GREEN,  Font.BOLD);
 
         p.add(lbl("Subtotal:"));    p.add(txtSubtotal);
-        p.add(lbl("Pajak (10%):")); p.add(txtPajak);
+        lblPajak = lbl("Pajak (10%):"); // placeholder, akan di-update via updatePajakLabel()
+        p.add(lblPajak); p.add(txtPajak);
         p.add(lbl("Total:"));       p.add(txtTotal);
         p.add(lbl("Bayar:"));       p.add(txtBayar);
         p.add(lbl("Kembalian:"));   p.add(txtKembalian);
@@ -417,7 +423,7 @@ public class Dashboard extends javax.swing.JFrame {
                     Rupiah.format(sub)));
             }
         }
-        int pajak      = (int) Math.round(subtotal * 0.1);
+        int pajak      = hitungPajak(subtotal);
         int totalBayar = subtotal + pajak;
 
         txtStruk.setText(sb.toString());
@@ -433,6 +439,18 @@ public class Dashboard extends javax.swing.JFrame {
         return Rupiah.format(v);
     }
 
+    /** Perbarui label pajak di panel total (mis. "Pajak (10%):"). */
+    private void updatePajakLabel() {
+        if (lblPajak != null) {
+            lblPajak.setText("Pajak (" + pajakPersen + "%):");
+        }
+    }
+
+    /** Hitung pajak berdasarkan persentase dari pengaturan. */
+    private int hitungPajak(int subtotal) {
+        return (int) Math.round(subtotal * (pajakPersen / 100.0));
+    }
+
     // ── Proses bayar ──────────────────────────────────────────────────────────
     private void prosesBayar() {
         int subtotal = 0;
@@ -444,7 +462,7 @@ public class Dashboard extends javax.swing.JFrame {
             JOptionPane.showMessageDialog(this, "Belum ada item yang dipilih!", "Peringatan", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        int pajak    = (int) Math.round(subtotal * 0.1);
+        int pajak    = hitungPajak(subtotal);
         int totalInt = subtotal + pajak;
 
         // ── Dialog pembayaran custom ──────────────────────────────────────────
@@ -675,7 +693,7 @@ public class Dashboard extends javax.swing.JFrame {
             }
             struk.append("----------------------------\n");
             struk.append("Subtotal  : Rp ").append(fmt(subtotal)).append("\n");
-            struk.append("Pajak 10% : Rp ").append(fmt(pajak)).append("\n");
+            struk.append("Pajak ").append(pajakPersen).append("% : Rp ").append(fmt(pajak)).append("\n");
             struk.append("Total     : Rp ").append(fmt(totalInt)).append("\n");
             struk.append("Bayar     : Rp ").append(fmt(bayar)).append("\n");
             struk.append("Kembalian : Rp ").append(fmt(kembalian)).append("\n");
@@ -686,7 +704,7 @@ public class Dashboard extends javax.swing.JFrame {
             // ── Dialog struk custom ───────────────────────────────────────────
             tampilkanDialogStruk(kode, currentUser,
                 new SimpleDateFormat("dd/MM/yyyy HH:mm").format(new java.util.Date()),
-                menuRows, subtotal, pajak, totalInt, bayar, kembalian);
+                menuRows, subtotal, pajak, totalInt, bayar, kembalian, pajakPersen);
             reset();
             loadMenuFromDB(); // refresh stok di kartu menu
             // reset()/hitungTotal() mengosongkan panel total; tampilkan kembali
@@ -731,7 +749,7 @@ public class Dashboard extends javax.swing.JFrame {
 
     // ── Dialog struk cantik ───────────────────────────────────────────────────
     private void tampilkanDialogStruk(String kode, String kasir, String tgl,
-            List<MenuRow> rows, int subtotal, int pajak, int totalInt, long bayar, long kembalian) {
+            List<MenuRow> rows, int subtotal, int pajak, int totalInt, long bayar, long kembalian, int pajakPersen) {
 
         JDialog dlg = new JDialog(this, "Transaksi Berhasil", true);
         dlg.setSize(420, 580);
@@ -820,11 +838,11 @@ public class Dashboard extends javax.swing.JFrame {
         Font fBold = new Font("Times New Roman", Font.BOLD, 13);
 
         String[][] sumRows = {
-            {"Subtotal",  "Rp " + fmt(subtotal)},
-            {"Pajak 10%", "Rp " + fmt(pajak)},
-            {"Total",     "Rp " + fmt(totalInt)},
-            {"Bayar",     "Rp " + fmt(bayar)},
-            {"Kembalian", "Rp " + fmt(kembalian)}
+            {"Subtotal",          "Rp " + fmt(subtotal)},
+            {"Pajak " + pajakPersen + "%", "Rp " + fmt(pajak)},
+            {"Total",             "Rp " + fmt(totalInt)},
+            {"Bayar",             "Rp " + fmt(bayar)},
+            {"Kembalian",         "Rp " + fmt(kembalian)}
         };
         for (int i = 0; i < sumRows.length; i++) {
             boolean isBold = (i == 2 || i == 4);
@@ -1353,7 +1371,7 @@ public class Dashboard extends javax.swing.JFrame {
             else if (t.startsWith("Tgl"))       tgl=t.replaceFirst("Tgl\\s*:\\s*","");
             else if (t.startsWith("---"))       { dashCount++; inItems=(dashCount==1); }
             else if (t.startsWith("Subtotal"))  subtotalStr=t.replaceFirst("Subtotal\\s*:\\s*","");
-            else if (t.startsWith("Pajak"))     pajakStr=t.replaceFirst("Pajak 10%\\s*:\\s*","");
+            else if (t.startsWith("Pajak"))     pajakStr=t.replaceFirst("Pajak \\d+%\\s*:\\s*","");
             else if (t.startsWith("Total"))     totalStr=t.replaceFirst("Total\\s*:\\s*","");
             else if (t.startsWith("Bayar"))     bayarStr=t.replaceFirst("Bayar\\s*:\\s*","");
             else if (t.startsWith("Kembalian")) kembalianStr=t.replaceFirst("Kembalian\\s*:\\s*","");
@@ -1397,7 +1415,7 @@ public class Dashboard extends javax.swing.JFrame {
         }
         cs.append(String.format("%.2f %.2f m %.2f %.2f l S\n",MARGIN,y,PW-MARGIN,y)); y-=11;
         // Summary
-        String[][] sum={{"Subtotal",subtotalStr},{"Pajak 10%",pajakStr},{"Total",totalStr},{"Bayar",bayarStr},{"Kembalian",kembalianStr}};
+        String[][] sum={{"Subtotal",subtotalStr},{"Pajak " + pajakPersen + "%",pajakStr},{"Total",totalStr},{"Bayar",bayarStr},{"Kembalian",kembalianStr}};
         for (int i=0;i<sum.length;i++) {
             String fn=(i==2||i==4)?"/F1":"/F2"; float fs=(i==2||i==4)?9f:8f;
             cs.append("BT\n"+fn+" "+fs+" Tf\n"); cs.append(String.format("%.2f %.2f Td\n",MARGIN+5,y));
