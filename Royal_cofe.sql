@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS transaksi (
     total INT DEFAULT 0,
     bayar BIGINT DEFAULT 0,
     kembalian BIGINT DEFAULT 0,
+    diskon_tipe ENUM('persen','nominal') DEFAULT 'persen',
+    diskon_nilai DECIMAL(10,2) DEFAULT 0,
     tanggal TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -49,6 +51,27 @@ CREATE TABLE IF NOT EXISTS detail_transaksi (
     subtotal INT,
     FOREIGN KEY (kode_transaksi) REFERENCES transaksi(kode_transaksi)
 );
+
+-- Tabel pengaturan (key-value) untuk konfigurasi aplikasi
+CREATE TABLE IF NOT EXISTS pengaturan (
+    `key` VARCHAR(50) NOT NULL PRIMARY KEY,
+    `value` TEXT,
+    `description` VARCHAR(200),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+-- Data default pengaturan
+INSERT INTO pengaturan (`key`, `value`, `description`) VALUES
+('pajak_persen', '10', 'Persentase pajak (contoh: 10 = 10%)'),
+('nama_toko', 'ROYAL CAFE', 'Nama toko untuk struk/laporan'),
+('alamat_toko', 'Jl. Contoh No. 123, Kota', 'Alamat toko untuk struk'),
+('footer_struk', 'Terima kasih atas kunjungan Anda!', 'Footer struk pembayaran')
+ON DUPLICATE KEY UPDATE
+    `value` = VALUES(`value`),
+    `description` = VALUES(`description`);
+
+-- Index untuk performa filter tanggal
+CREATE INDEX IF NOT EXISTS idx_transaksi_tanggal ON transaksi(tanggal);
 
 -- ============================================
 -- User awal
