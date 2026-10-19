@@ -16,7 +16,7 @@ Terakhir diperbarui: 18 Oktober 2026
 | 2.1 | Manajemen User (admin) | ✅ Selesai |
 | 2.2 | Ganti Password + Kelola User | ✅ Selesai |
 | 2.3 | Filter tanggal + pagination Riwayat | ✅ Selesai |
-| 2.4 | Konfigurasi pajak & diskon | ⏳ Belum |
+| 2.4 | Konfigurasi pajak & diskon | ✅ Selesai |
 | 2.5 | Void / Refund transaksi | ⏳ Belum |
 | 3 | Laporan & Analitik | ⏳ Belum |
 | 4 | Refactor & Kualitas | ⏳ Belum |
@@ -160,15 +160,31 @@ CREATE INDEX idx_transaksi_tanggal ON transaksi(tanggal);
 
 ---
 
+## Fase 2.4 — Konfigurasi Pajak & Diskon (✅ Selesai)
+
+- **File baru:** `Pengaturan.java` — utilitas key-value load/save ke tabel `pengaturan`.
+- **Tabel `pengaturan`** (key-value): `pajak_persen`, `nama_toko`, `alamat_toko`, `footer_struk`.
+- **Migrasi DB:** `migrasi_fase2_4.sql` + update `Royal_cofe.sql` (instalasi baru).
+- **Perubahan `Dashboard.java`:**
+  - Load pengaturan di constructor → `pajakPersen = Pengaturan.getInt("pajak_persen", 10)`.
+  - Method `hitungPajak(int subtotal)` pakai persentase dinamis.
+  - Label panel total "Pajak (10%):" → dinamis via `updatePajakLabel()`.
+  - Struk teks, dialog struk, dan PDF pakai persentase dinamis.
+  - Regex parsing PDF diperluas (`Pajak \d+%`) agar fleksibel.
+- **Kolom diskon** ditambah di `transaksi` (`diskon_tipe`, `diskon_nilai`) untuk Fase 2.4 lanjutan.
+- **Index** `idx_transaksi_tanggal` untuk performa filter (Fase 2.3).
+
+### Commit
+| Hash | Pesan |
+|---|---|
+| `339d476` | `feat: konfigurasi pajak dari DB (pengaturan table) + label dinamis` |
+| `f1cae63` | `docs: update Royal_cofe.sql (tambah tabel pengaturan, kolom diskon, index tanggal)` |
+
+---
+
 ## Roadmap Selanjutnya (Belum dikerjakan)
 
-### Fase 2.4 — Konfigurasi pajak & diskon *(butuh migrasi DB)*
-- Tabel `pengaturan` (key-value): `pajak_persen`, `nama_toko`, `alamat`,
-  `footer_struk`.
-- Ganti `0.1` hardcoded di `Dashboard.java` (baris ~410 & ~437) dengan nilai
-  dari DB; label "Pajak (10%)" jadi dinamis.
-- (Opsional) Fitur diskon: input nominal/%, kolom `diskon` di `transaksi`
-  (menyentuh `simpanTransaksi`, struk, PDF, Riwayat).
+### Fase 2.5 — Void / Refund transaksi *(butuh migrasi DB)*
 
 ### Fase 2.5 — Void / Refund transaksi *(butuh migrasi DB)*
 - `ALTER TABLE transaksi ADD status ENUM('selesai','void') DEFAULT 'selesai',
@@ -213,6 +229,9 @@ CREATE INDEX idx_transaksi_tanggal ON transaksi(tanggal);
 
 | Hash | Pesan |
 |---|---|
+| `f1cae63` | `docs: update Royal_cofe.sql (tambah tabel pengaturan, kolom diskon, index tanggal)` |
+| `339d476` | `feat: konfigurasi pajak dari DB (pengaturan table) + label dinamis` |
+| `9e8514b` | `docs: tambah perbaikan-royal-cafe.md (ringkasan perbaikan Fase 1 & 2)` |
 | `bf88488` | `feat(riwayat): filter tanggal + pagination` |
 | `df4875c` | `feat(dashboard): tombol Kelola User + Ganti Password` |
 | `190bf85` | `feat: manajemen user UI (admin)` |
