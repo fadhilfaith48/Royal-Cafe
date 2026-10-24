@@ -17,7 +17,7 @@ Terakhir diperbarui: 18 Oktober 2026
 | 2.2 | Ganti Password + Kelola User | ✅ Selesai |
 | 2.3 | Filter tanggal + pagination Riwayat | ✅ Selesai |
 | 2.4 | Konfigurasi pajak & diskon | ✅ Selesai |
-| 2.5 | Void / Refund transaksi | ⏳ Belum |
+| 2.5 | Void / Refund transaksi | ✅ Selesai |
 | 3 | Laporan & Analitik | ⏳ Belum |
 | 4 | Refactor & Kualitas | ⏳ Belum |
 
@@ -182,15 +182,38 @@ CREATE INDEX idx_transaksi_tanggal ON transaksi(tanggal);
 
 ---
 
+## Fase 2.5 — Void / Refund Transaksi (✅ Selesai)
+
+- **Migrasi DB:** `migrasi_fase2_5.sql` + update `Royal_cofe.sql`.
+  - Kolom baru di `transaksi`: `status ENUM('selesai','void')`,
+    `alasan_void TEXT`, `void_by VARCHAR(50)`, `void_at TIMESTAMP NULL`.
+  - Index `idx_transaksi_status`.
+- **`RiwayatTransaksi.java`:**
+  - Constructor baru `RiwayatTransaksi(String username, String role)`; no-arg
+    tetap ada untuk kompatibilitas.
+  - Kolom **Status** (index 8) di tabel transaksi; baris void berwarna merah
+    dan bertuliskan `VOID`.
+  - Tombol **Void Transaksi** hanya muncul untuk role `admin`.
+  - `voidTransaksi()`: dialog alasan → DB transaction (`SELECT ... FOR UPDATE`,
+    `UPDATE transaksi SET status='void'`, `UPDATE menu SET stok = stok + qty`
+    per item) → commit/rollback → reload tabel.
+  - Transaksi berstatus void tidak bisa di-void dua kali (idempotent).
+  - Dialog struk & PDF menampilkan penanda `*** TRANSAKSI VOID ***`.
+  - Label pajak di dialog/PDF kini mengikuti `Pengaturan.getInt("pajak_persen")`.
+  - `pastikanKolomVoidAda()` mengecek/menambah kolom via `DatabaseMetaData`
+    (aman untuk MySQL 8 yang tidak mendukung `ADD COLUMN IF NOT EXISTS`).
+- **`Dashboard.java`:** membuka riwayat dengan
+  `new RiwayatTransaksi(currentUser, currentRole)` agar role ikut terbawa.
+
+### Commit
+| Hash | Pesan |
+|---|---|
+| `22b6772` | `feat(db): tambah kolom & index void transaksi (Fase 2.5)` |
+| `87ea9f0` | `feat(riwayat): void transaksi admin + pengembalian stok` |
+
+---
+
 ## Roadmap Selanjutnya (Belum dikerjakan)
-
-### Fase 2.5 — Void / Refund transaksi *(butuh migrasi DB)*
-
-### Fase 2.5 — Void / Refund transaksi *(butuh migrasi DB)*
-- `ALTER TABLE transaksi ADD status ENUM('selesai','void') DEFAULT 'selesai',
-  ADD alasan_void, ADD void_by, ADD void_at`.
-- Admin bisa void transaksi → stok dikembalikan (`UPDATE menu SET stok = stok + qty`).
-- Riwayat menandai transaksi void.
 
 ### Fase 3 — Laporan & Analitik
 - `LaporanPenjualan.java`: total pendapatan, jumlah transaksi, rata-rata.
@@ -229,6 +252,8 @@ CREATE INDEX idx_transaksi_tanggal ON transaksi(tanggal);
 
 | Hash | Pesan |
 |---|---|
+| `87ea9f0` | `feat(riwayat): void transaksi admin + pengembalian stok` |
+| `22b6772` | `feat(db): tambah kolom & index void transaksi (Fase 2.5)` |
 | `f1cae63` | `docs: update Royal_cofe.sql (tambah tabel pengaturan, kolom diskon, index tanggal)` |
 | `339d476` | `feat: konfigurasi pajak dari DB (pengaturan table) + label dinamis` |
 | `9e8514b` | `docs: tambah perbaikan-royal-cafe.md (ringkasan perbaikan Fase 1 & 2)` |
