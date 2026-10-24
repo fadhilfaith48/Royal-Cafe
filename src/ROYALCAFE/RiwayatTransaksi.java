@@ -26,21 +26,62 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
     private int totalPages = 0;
     private int totalRecords = 0;
 
+    // User yang sedang login (untuk otorisasi void)
+    private String currentUser = "kasir";
+    private String currentRole = "kasir";
+
     public RiwayatTransaksi() {
+        this("kasir", "kasir");
+    }
+
+    public RiwayatTransaksi(String username, String role) {
+        this.currentUser = (username == null || username.trim().isEmpty()) ? "kasir" : username;
+        this.currentRole = (role == null || role.trim().isEmpty()) ? "kasir" : role;
         initComponents();
         setLocationRelativeTo(null);
         initTables();
+        pastikanKolomVoidAda();
         loadTransaksi();
+    }
+
+    /** Apakah user yang login admin? */
+    private boolean isAdmin() {
+        return "admin".equalsIgnoreCase(currentRole);
     }
 
     private void initTables() {
         modelTransaksi = new DefaultTableModel(
-            new String[]{"Kode", "Kasir", "Subtotal", "Pajak", "Total", "Bayar", "Kembalian", "Tanggal"}, 0
+            new String[]{"Kode", "Kasir", "Subtotal", "Pajak", "Total", "Bayar", "Kembalian", "Tanggal", "Status"}, 0
         ) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         tblTransaksi.setModel(modelTransaksi);
         tblTransaksi.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+
+        // Renderer status: transaksi void ditandai merah
+        tblTransaksi.setDefaultRenderer(Object.class, new javax.swing.table.DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(
+                        table, value, isSelected, hasFocus, row, column);
+                String status = "";
+                if (row >= 0 && row < modelTransaksi.getRowCount()) {
+                    Object s = modelTransaksi.getValueAt(row, 8);
+                    status = s == null ? "" : s.toString();
+                }
+                boolean isVoid = "void".equalsIgnoreCase(status);
+                if (column == 8) {
+                    setText(isVoid ? "VOID" : "Selesai");
+                    setHorizontalAlignment(SwingConstants.CENTER);
+                }
+                if (!isSelected) {
+                    c.setForeground(isVoid ? new java.awt.Color(204, 0, 0) : java.awt.Color.BLACK);
+                }
+                return c;
+            }
+        });
+
         // Klik baris → langsung buka dialog struk custom
         tblTransaksi.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
@@ -57,11 +98,49 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
         tblDetail.setModel(modelDetail);
     }
 
+    /**
+     * Pastikan kolom void sudah ada di tabel transaksi.
+     * MySQL 8 tidak mendukung ADD COLUMN IF NOT EXISTS, jadi dicek via metadata.
+     */
+    private void pastikanKolomVoidAda() {
+        boolean adaStatus = false, adaAlasan = false, adaBy = false, adaAt = false;
+        try (Connection conn = DBConnection.getConnection()) {
+            DatabaseMetaData meta = conn.getMetaData();
+            try (ResultSet rs = meta.getColumns(conn.getCatalog(), null, "transaksi", "%")) {
+                while (rs.next()) {
+                    String kolom = rs.getString("COLUMN_NAME");
+                    if ("status".equalsIgnoreCase(kolom))      adaStatus = true;
+                    if ("alasan_void".equalsIgnoreCase(kolom)) adaAlasan = true;
+                    if ("void_by".equalsIgnoreCase(kolom))     adaBy = true;
+                    if ("void_at".equalsIgnoreCase(kolom))     adaAt = true;
+                }
+            }
+            try (Statement st = conn.createStatement()) {
+                if (!adaStatus) {
+                    st.executeUpdate("ALTER TABLE transaksi ADD COLUMN status ENUM('selesai','void') DEFAULT 'selesai'");
+                }
+                if (!adaAlasan) {
+                    st.executeUpdate("ALTER TABLE transaksi ADD COLUMN alasan_void TEXT");
+                }
+                if (!adaBy) {
+                    st.executeUpdate("ALTER TABLE transaksi ADD COLUMN void_by VARCHAR(50)");
+                }
+                if (!adaAt) {
+                    st.executeUpdate("ALTER TABLE transaksi ADD COLUMN void_at TIMESTAMP NULL");
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Peringatan: gagal menyiapkan kolom void: " + e.getMessage());
+        }
+    }
+
     private void loadTransaksi() {
         modelTransaksi.setRowCount(0);
 
         // Build query with filter and pagination
-        StringBuilder sql = new StringBuilder("SELECT * FROM transaksi WHERE 1=1");
+        StringBuilder sql = new StringBuilder(
+            "SELECT kode_transaksi, kasir, subtotal, pajak, total, bayar, kembalian, tanggal, status "
+            + "FROM transaksi WHERE 1=1");
         List<Object> params = new ArrayList<>();
 
         if (filterDari != null) {
@@ -91,7 +170,8 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
                     "Rp " + Rupiah.format(rs.getInt("total")),
                     "Rp " + Rupiah.format(rs.getLong("bayar")),
                     "Rp " + Rupiah.format(rs.getLong("kembalian")),
-                    rs.getTimestamp("tanggal")
+                    rs.getTimestamp("tanggal"),
+                    rs.getString("status") == null ? "selesai" : rs.getString("status")
                 });
             }
         } catch (SQLException e) {
@@ -185,6 +265,126 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
         bukaDialogStruk();
     }
 
+    /**
+     * Void transaksi (khusus admin).
+     * Menandai transaksi sebagai void, menyimpan alasan/pelaku/waktu,
+     * lalu mengembalikan stok setiap menu pada detail transaksi.
+     */
+    private void voidTransaksi() {
+        if (!isAdmin()) {
+            JOptionPane.showMessageDialog(this,
+                "Hanya admin yang dapat melakukan void transaksi.",
+                "Akses Ditolak", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        int row = tblTransaksi.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this,
+                "Pilih transaksi yang ingin di-void terlebih dahulu!",
+                "Peringatan", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        String kode = modelTransaksi.getValueAt(row, 0).toString();
+        String status = String.valueOf(modelTransaksi.getValueAt(row, 8));
+        if ("void".equalsIgnoreCase(status)) {
+            JOptionPane.showMessageDialog(this,
+                "Transaksi " + kode + " sudah berstatus VOID.",
+                "Informasi", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        JTextField txtAlasan = new JTextField(24);
+        JPanel pInput = new JPanel(new java.awt.GridLayout(0, 1, 4, 4));
+        pInput.add(new JLabel("Alasan void untuk transaksi " + kode + ":"));
+        pInput.add(txtAlasan);
+
+        int opt = JOptionPane.showConfirmDialog(this, pInput,
+            "Konfirmasi Void Transaksi", JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.WARNING_MESSAGE);
+        if (opt != JOptionPane.OK_OPTION) return;
+
+        String alasan = txtAlasan.getText().trim();
+        if (alasan.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "Alasan void wajib diisi!", "Validasi", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try (Connection conn = DBConnection.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                // Kunci baris & cek status terkini agar tidak double-void
+                String statusTerkini;
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "SELECT status FROM transaksi WHERE kode_transaksi = ? FOR UPDATE")) {
+                    ps.setString(1, kode);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        if (!rs.next()) throw new SQLException("Transaksi tidak ditemukan.");
+                        statusTerkini = rs.getString(1);
+                    }
+                }
+                if ("void".equalsIgnoreCase(statusTerkini)) {
+                    throw new SQLException("Transaksi ini sudah di-void.");
+                }
+
+                // 1. Tandai transaksi void
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "UPDATE transaksi SET status='void', alasan_void=?, void_by=?, void_at=NOW() "
+                        + "WHERE kode_transaksi=?")) {
+                    ps.setString(1, alasan);
+                    ps.setString(2, currentUser);
+                    ps.setString(3, kode);
+                    if (ps.executeUpdate() == 0) {
+                        throw new SQLException("Gagal memperbarui status transaksi.");
+                    }
+                }
+
+                // 2. Ambil item untuk pengembalian stok
+                List<Object[]> items = new ArrayList<>();
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "SELECT nama_menu, qty FROM detail_transaksi WHERE kode_transaksi=?")) {
+                    ps.setString(1, kode);
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            items.add(new Object[]{rs.getString("nama_menu"), rs.getInt("qty")});
+                        }
+                    }
+                }
+
+                // 3. Kembalikan stok menu
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "UPDATE menu SET stok = stok + ? WHERE nama_menu = ?")) {
+                    for (Object[] it : items) {
+                        ps.setInt(1, (Integer) it[1]);
+                        ps.setString(2, (String) it[0]);
+                        ps.addBatch();
+                    }
+                    ps.executeBatch();
+                }
+
+                conn.commit();
+
+                JOptionPane.showMessageDialog(this,
+                    "Transaksi " + kode + " berhasil di-void.\n"
+                    + "Stok menu telah dikembalikan.",
+                    "Berhasil", JOptionPane.INFORMATION_MESSAGE);
+                loadTransaksi();
+                modelDetail.setRowCount(0);
+            } catch (SQLException ex) {
+                conn.rollback();
+                throw ex;
+            } finally {
+                try { conn.setAutoCommit(true); } catch (SQLException ignored) {}
+            }
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this,
+                "Gagal void transaksi: " + e.getMessage(),
+                "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     /** Buka dialog struk custom langsung tanpa dialog lama */
     private void bukaDialogStruk() {
         int row = tblTransaksi.getSelectedRow();
@@ -198,6 +398,7 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
         String bayar    = modelTransaksi.getValueAt(row, 5).toString();
         String kembali  = modelTransaksi.getValueAt(row, 6).toString();
         String tanggal  = modelTransaksi.getValueAt(row, 7).toString();
+        String status   = String.valueOf(modelTransaksi.getValueAt(row, 8));
 
         // Ambil detail item dari database
         java.util.List<String[]> items = new java.util.ArrayList<>();
@@ -218,12 +419,13 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
             return;
         }
 
-        tampilkanDialogStruk(kode, kasir, tanggal, items, subtotal, pajak, total, bayar, kembali);
+        tampilkanDialogStruk(kode, kasir, tanggal, items, subtotal, pajak, total, bayar, kembali, status);
     }
 
     private void tampilkanDialogStruk(String kode, String kasir, String tgl,
             java.util.List<String[]> items,
-            String subtotal, String pajak, String total, String bayar, String kembali) {
+            String subtotal, String pajak, String total, String bayar, String kembali,
+            String status) {
 
         JDialog dlg = new JDialog(this, "Detail Transaksi", true);
         dlg.setSize(420, 560);
@@ -304,7 +506,7 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
         java.awt.Font fSum  = new java.awt.Font("Times New Roman", java.awt.Font.PLAIN, 13);
         java.awt.Font fBold = new java.awt.Font("Times New Roman", java.awt.Font.BOLD, 13);
         String[][] sumRows = {
-            {"Subtotal",  subtotal}, {"Pajak 10%", pajak},
+            {"Subtotal",  subtotal}, {"Pajak " + Pengaturan.getInt("pajak_persen", 10) + "%", pajak},
             {"Total",     total},    {"Bayar",     bayar}, {"Kembalian", kembali}
         };
         for (int i = 0; i < sumRows.length; i++) {
@@ -329,6 +531,16 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
         pBody.add(pItems);  pBody.add(Box.createVerticalStrut(6));
         pBody.add(sep3);    pBody.add(Box.createVerticalStrut(6));
         pBody.add(pSum);    pBody.add(Box.createVerticalStrut(8));
+
+        if ("void".equalsIgnoreCase(status)) {
+            JLabel lblVoid = new JLabel("*** TRANSAKSI VOID ***", SwingConstants.CENTER);
+            lblVoid.setFont(new java.awt.Font("Times New Roman", java.awt.Font.BOLD, 14));
+            lblVoid.setForeground(new java.awt.Color(204, 0, 0));
+            lblVoid.setAlignmentX(java.awt.Component.CENTER_ALIGNMENT);
+            pBody.add(lblVoid);
+            pBody.add(Box.createVerticalStrut(8));
+        }
+
         pBody.add(sep4);
 
         JScrollPane scroll = new JScrollPane(pBody);
@@ -361,7 +573,7 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
             if (!f.getName().toLowerCase().endsWith(".pdf"))
                 f = new java.io.File(f.getAbsolutePath() + ".pdf");
             try {
-                buatPDFManual(f, kode, kasir, tgl, items, subtotal, pajak, total, bayar, kembali);
+                buatPDFManual(f, kode, kasir, tgl, items, subtotal, pajak, total, bayar, kembali, status);
                 JOptionPane.showMessageDialog(dlg,
                     "Struk disimpan ke:\n" + f.getAbsolutePath(),
                     "Berhasil", JOptionPane.INFORMATION_MESSAGE);
@@ -387,7 +599,7 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
      */
     private void buatPDFManual(java.io.File file, String kode, String kasir, String tanggal,
             java.util.List<String[]> items, String subtotal, String pajak,
-            String total, String bayar, String kembali) throws Exception {
+            String total, String bayar, String kembali, String status) throws Exception {
 
         final float PW = 226, MARGIN = 14, cW = PW - 2 * MARGIN;
         float PH = Math.max(420, (10 + items.size() * 2 + 6) * 13f + 80);
@@ -417,6 +629,12 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
             cs.append("(" + row[0] + " : " + esc(row[1]) + ") Tj\nET\n"); y -= 10;
         }
 
+        if ("void".equalsIgnoreCase(status)) {
+            cs.append("BT\n/F1 9 Tf\n");
+            cs.append(String.format("%.2f %.2f Td\n", MARGIN, y));
+            cs.append("(*** TRANSAKSI VOID ***) Tj\nET\n"); y -= 11;
+        }
+
         cs.append(String.format("%.2f %.2f m %.2f %.2f l S\n", MARGIN, y, PW - MARGIN, y)); y -= 9;
 
         // Header tabel
@@ -441,7 +659,7 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
         // Ringkasan
         String[][] sum = {
             {"Subtotal",  subtotal},
-            {"Pajak 10%", pajak},
+            {"Pajak " + Pengaturan.getInt("pajak_persen", 10) + "%", pajak},
             {"Total",     total},
             {"Bayar",     bayar},
             {"Kembalian", kembali}
@@ -732,6 +950,14 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
         btnCetakPDF.setFocusPainted(false);
         btnCetakPDF.addActionListener(e -> cetakPDF());
 
+        // Tombol void (hanya admin)
+        btnVoid = new javax.swing.JButton("Void Transaksi");
+        btnVoid.setBackground(new java.awt.Color(204, 0, 0));
+        btnVoid.setForeground(java.awt.Color.WHITE);
+        btnVoid.setFont(new java.awt.Font("Times New Roman", java.awt.Font.BOLD, 13));
+        btnVoid.setFocusPainted(false);
+        btnVoid.addActionListener(e -> voidTransaksi());
+
         // Pagination panel
         pnlPagination.setBackground(new java.awt.Color(204, 204, 204));
 
@@ -779,6 +1005,20 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
+
+        // Baris tombol bawah — tombol Void hanya untuk admin
+        javax.swing.GroupLayout.SequentialGroup btnRowH = layout.createSequentialGroup()
+            .addComponent(btnRefresh).addGap(10)
+            .addComponent(btnCetakPDF).addGap(10);
+        if (isAdmin()) btnRowH.addComponent(btnVoid).addGap(10);
+        btnRowH.addComponent(btnKembali);
+
+        javax.swing.GroupLayout.ParallelGroup btnRowV =
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                .addComponent(btnRefresh).addComponent(btnCetakPDF);
+        if (isAdmin()) btnRowV.addComponent(btnVoid);
+        btnRowV.addComponent(btnKembali);
+
         layout.setHorizontalGroup(layout.createParallelGroup()
             .addComponent(jPanel1)
             .addGroup(layout.createSequentialGroup().addGap(10)
@@ -788,8 +1028,7 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
                     .addComponent(pnlPagination)
                     .addComponent(jLabelDetail)
                     .addComponent(jScrollPane2)
-                    .addGroup(layout.createSequentialGroup()
-                        .addComponent(btnRefresh).addGap(10).addComponent(btnCetakPDF).addGap(10).addComponent(btnKembali)))
+                    .addGroup(btnRowH))
                 .addGap(10))
         );
         layout.setVerticalGroup(layout.createSequentialGroup()
@@ -799,8 +1038,7 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
             .addComponent(pnlPagination, 42, 42, 42).addGap(10)
             .addComponent(jLabelDetail).addGap(5)
             .addComponent(jScrollPane2, 150, 150, 150).addGap(10)
-            .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                .addComponent(btnRefresh).addComponent(btnCetakPDF).addComponent(btnKembali))
+            .addGroup(btnRowV)
             .addGap(10)
         );
 
@@ -822,5 +1060,5 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
     private javax.swing.JSplitPane jSplitPane1;
     private javax.swing.JScrollPane jScrollPane1, jScrollPane2;
     private javax.swing.JTable tblTransaksi, tblDetail;
-    private javax.swing.JButton btnRefresh, btnKembali, btnCetakPDF;
+    private javax.swing.JButton btnRefresh, btnKembali, btnCetakPDF, btnVoid;
 }

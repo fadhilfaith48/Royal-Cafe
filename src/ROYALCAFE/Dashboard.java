@@ -225,7 +225,7 @@ public class Dashboard extends javax.swing.JFrame {
                 }
             });
         });
-        btnRiwayat.addActionListener(e -> new RiwayatTransaksi().setVisible(true));
+        btnRiwayat.addActionListener(e -> new RiwayatTransaksi(currentUser, currentRole).setVisible(true));
         btnKeluar.addActionListener(e -> konfirmasiKeluar());
 
         // Tombol admin: Kelola User, Kelola Menu, Edit Transaksi
