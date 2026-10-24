@@ -38,6 +38,10 @@ CREATE TABLE IF NOT EXISTS transaksi (
     kembalian BIGINT DEFAULT 0,
     diskon_tipe ENUM('persen','nominal') DEFAULT 'persen',
     diskon_nilai DECIMAL(10,2) DEFAULT 0,
+    status ENUM('selesai','void') DEFAULT 'selesai',
+    alasan_void TEXT,
+    void_by VARCHAR(50),
+    void_at TIMESTAMP NULL,
     tanggal TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -72,6 +76,9 @@ ON DUPLICATE KEY UPDATE
 
 -- Index untuk performa filter tanggal
 CREATE INDEX IF NOT EXISTS idx_transaksi_tanggal ON transaksi(tanggal);
+
+-- Index untuk filter status (void)
+CREATE INDEX IF NOT EXISTS idx_transaksi_status ON transaksi(status);
 
 -- ============================================
 -- User awal
