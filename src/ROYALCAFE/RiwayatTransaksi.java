@@ -743,16 +743,14 @@ public class RiwayatTransaksi extends javax.swing.JFrame {
                 break;
         }
         // Update text fields
-        SimpleDateFormat df = new SimpleDateFormat("dd/MM/yyyy");
-        txtDari.setValue(filterDari != null ? df.format(filterDari) : null);
-        txtSampai.setValue(filterSampai != null ? df.format(filterSampai) : null);
+        txtDari.setValue(filterDari);
+        txtSampai.setValue(filterSampai);
         // Reset to first page and reload
         currentPage = 0;
         loadTransaksi();
     }
 
     private void applyFilter() {
-        SimpleDateFormat df = new SimpleDateFormat("dd/MM/yyyy");
         try {
             Object dariVal = txtDari.getValue();
             Object sampaiVal = txtSampai.getValue();
