@@ -18,7 +18,7 @@ Terakhir diperbarui: 18 Oktober 2026
 | 2.3 | Filter tanggal + pagination Riwayat | ✅ Selesai |
 | 2.4 | Konfigurasi pajak & diskon | ✅ Selesai |
 | 2.5 | Void / Refund transaksi | ✅ Selesai |
-| 3 | Laporan & Analitik | ⏳ Belum |
+| 3 | Laporan & Analitik | ✅ Selesai (belum di-commit) |
 | 4 | Refactor & Kualitas | ⏳ Belum |
 
 ---
@@ -213,12 +213,37 @@ CREATE INDEX idx_transaksi_tanggal ON transaksi(tanggal);
 
 ---
 
-## Roadmap Selanjutnya (Belum dikerjakan)
+## Fase 3 — Laporan & Analitik (✅ Selesai)
 
-### Fase 3 — Laporan & Analitik
-- `LaporanPenjualan.java`: total pendapatan, jumlah transaksi, rata-rata.
-- Menu terlaris (agregasi `detail_transaksi`).
-- Grafik sederhana + ekspor CSV/Excel + cetak PDF laporan.
+- **File baru:** `LaporanPenjualan.java` (JFrame, hanya admin).
+- **Filter periode:** Hari Ini, 7 Hari, Bulan Ini, Semua, + input manual
+  `dd/MM/yyyy`.
+- **Ringkasan:** total pendapatan, jumlah transaksi, rata-rata per transaksi,
+  total item terjual.
+- **Menu Terlaris:** Top 10 dari agregasi `detail_transaksi`
+  (`SUM(qty)`, `SUM(subtotal)`).
+- **Rekap Harian:** `GROUP BY DATE(tanggal)` → jumlah transaksi & pendapatan.
+- **Transaksi void dikecualikan** dari semua perhitungan
+  (`COALESCE(t.status,'selesai') <> 'void'`).
+- **Ekspor CSV:** UTF-8 + BOM, pemisah `;` (ramah Excel).
+- **Cetak PDF:** A4 multi-halaman, font Helvetica/Courier, header/footer,
+  nomor halaman.
+- **`Dashboard.java`:** tombol **📊 Laporan** (admin only) → membuka
+  `LaporanPenjualan`.
+- **Perbaikan bug tanggal:** preset filter di `LaporanPenjualan` dan
+  `RiwayatTransaksi` kini mengisi `JFormattedTextField` dengan objek `Date`
+  (bukan `String`), menghilangkan error
+  `Cannot format given Object as a Date`.
+
+### Commit
+| Hash | Pesan |
+|---|---|
+| `ec4d742` | `feat(laporan): halaman laporan penjualan + ekspor CSV/PDF` |
+| `285bea3` | `fix(riwayat): perbaikan isi tanggal pada filter preset` |
+
+---
+
+## Roadmap Selanjutnya (Belum dikerjakan)
 
 ### Fase 4 — Refactor & Kualitas
 - `PdfUtil.java` (satukan `Dashboard.buatPDF` & `RiwayatTransaksi.buatPDFManual`).
@@ -252,6 +277,9 @@ CREATE INDEX idx_transaksi_tanggal ON transaksi(tanggal);
 
 | Hash | Pesan |
 |---|---|
+| `285bea3` | `fix(riwayat): perbaikan isi tanggal pada filter preset` |
+| `ec4d742` | `feat(laporan): halaman laporan penjualan + ekspor CSV/PDF` |
+| `31dbb7b` | `docs: update perbaikan-royal-cafe.md (Fase 2.5 selesai + log commit)` |
 | `87ea9f0` | `feat(riwayat): void transaksi admin + pengembalian stok` |
 | `22b6772` | `feat(db): tambah kolom & index void transaksi (Fase 2.5)` |
 | `f1cae63` | `docs: update Royal_cofe.sql (tambah tabel pengaturan, kolom diskon, index tanggal)` |
