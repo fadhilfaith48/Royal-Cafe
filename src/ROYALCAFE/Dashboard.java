@@ -39,7 +39,7 @@ public class Dashboard extends javax.swing.JFrame {
     private JPanel  menuGridPanel;
     private JTextArea  txtStruk;
     private JTextField txtSubtotal, txtPajak, txtTotal, txtBayar, txtKembalian;
-    private JButton btnBayar, btnReset, btnKelolaMenu, btnKelolaUser, btnRiwayat, btnGantiPassword, btnKeluar;
+    private JButton btnBayar, btnReset, btnKelolaMenu, btnKelolaUser, btnRiwayat, btnLaporan, btnGantiPassword, btnKeluar;
 
     // ── Warna tema (sesuai login: header biru-ungu, bg abu-abu) ──────────────
     private static final Color HEADER_BG  = new Color(51, 0, 255);    // biru-ungu = login header
@@ -233,6 +233,12 @@ public class Dashboard extends javax.swing.JFrame {
         btnKelolaUser.addActionListener(e -> bukaManajemenUser());
         btnKelolaUser.setVisible("admin".equals(currentRole));
 
+        // Tombol Laporan (admin)
+        btnLaporan = footBtn("\uD83D\uDCCA Laporan", new Color(0, 102, 102));
+        btnLaporan.addActionListener(e ->
+                new LaporanPenjualan(currentUser, currentRole).setVisible(true));
+        btnLaporan.setVisible("admin".equals(currentRole));
+
         // Tombol Ganti Password (semua role)
         btnGantiPassword = footBtn("\uD83D\uDD11 Ganti Password", new Color(0, 102, 153));
         btnGantiPassword.addActionListener(e -> bukaGantiPassword());
@@ -245,7 +251,7 @@ public class Dashboard extends javax.swing.JFrame {
         btnKelolaMenu.setVisible("admin".equals(currentRole));
 
         p.add(btnBayar); p.add(btnReset); p.add(btnKelolaMenu);
-        p.add(btnKelolaUser); p.add(btnRiwayat); p.add(btnEdit);
+        p.add(btnKelolaUser); p.add(btnLaporan); p.add(btnRiwayat); p.add(btnEdit);
         p.add(btnGantiPassword); p.add(btnKeluar);
         return p;
     }
